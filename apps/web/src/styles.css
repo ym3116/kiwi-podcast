@@ -58,6 +58,139 @@ button {
   backdrop-filter: blur(18px);
 }
 
+.player-bar {
+  position: sticky;
+  top: 66px;
+  z-index: 18;
+  height: 58px;
+  display: grid;
+  grid-template-columns: 78px 178px minmax(0, 1fr);
+  align-items: center;
+  gap: 18px;
+  padding: 0 30px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(18px);
+}
+
+.speed-button,
+.transport-button {
+  border: 0;
+  cursor: pointer;
+  background: transparent;
+  color: var(--muted);
+}
+
+.speed-button {
+  min-width: 54px;
+  min-height: 36px;
+  border-radius: 8px;
+  font-weight: 760;
+}
+
+.speed-button:hover,
+.transport-button:hover {
+  color: var(--text);
+  background: var(--surface-soft);
+}
+
+.transport-controls {
+  display: grid;
+  grid-template-columns: 44px 44px 44px;
+  justify-content: center;
+  gap: 8px;
+}
+
+.transport-button {
+  width: 44px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+}
+
+.skip-button {
+  position: relative;
+}
+
+.skip-button span {
+  position: absolute;
+  top: 13px;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.play-button-small {
+  color: var(--text);
+}
+
+.now-playing {
+  min-width: 0;
+  height: 46px;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  max-width: 720px;
+}
+
+.mini-art {
+  width: 42px;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background:
+    linear-gradient(145deg, rgba(28, 111, 201, 0.94), rgba(25, 127, 91, 0.88)),
+    var(--blue);
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 820;
+}
+
+.now-playing-main {
+  min-width: 0;
+}
+
+.now-playing-text {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: baseline;
+  margin-bottom: 5px;
+}
+
+.now-playing-text strong {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 14px;
+}
+
+.now-playing-text span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.progress-slider {
+  width: 100%;
+  height: 4px;
+  display: block;
+  accent-color: var(--purple);
+  background: linear-gradient(
+    90deg,
+    var(--purple) 0,
+    var(--purple) var(--progress),
+    var(--line) var(--progress),
+    var(--line) 100%
+  );
+  border-radius: 999px;
+  cursor: pointer;
+}
+
 .brand {
   display: flex;
   align-items: center;
@@ -466,6 +599,32 @@ p {
     font-size: 20px;
   }
 
+  .player-bar {
+    top: 58px;
+    height: auto;
+    grid-template-columns: 64px minmax(0, 1fr);
+    grid-template-areas:
+      "speed controls"
+      "now now";
+    gap: 8px 12px;
+    padding: 8px 16px 10px;
+  }
+
+  .speed-button {
+    grid-area: speed;
+  }
+
+  .transport-controls {
+    grid-area: controls;
+    justify-content: end;
+  }
+
+  .now-playing {
+    grid-area: now;
+    max-width: none;
+    width: 100%;
+  }
+
   .page-shell {
     width: min(100vw - 28px, 680px);
     padding: 26px 0 54px;
@@ -540,5 +699,27 @@ p {
 
   .script-body p {
     font-size: 18px;
+  }
+
+  .player-bar {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "controls"
+      "now";
+  }
+
+  .speed-button {
+    position: absolute;
+    left: 16px;
+    top: 10px;
+  }
+
+  .transport-controls {
+    justify-content: center;
+  }
+
+  .now-playing-text {
+    grid-template-columns: 1fr;
+    gap: 1px;
   }
 }

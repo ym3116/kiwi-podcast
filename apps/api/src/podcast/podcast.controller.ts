@@ -4,13 +4,14 @@ import {
   Headers,
   HttpException,
   HttpStatus,
+  Inject,
   Param,
 } from '@nestjs/common';
 import { PodcastService } from './podcast.service';
 
 @Controller('api/podcast')
 export class PodcastController {
-  constructor(private readonly podcastService: PodcastService) {}
+  constructor(@Inject(PodcastService) private readonly podcastService: PodcastService) {}
 
   @Get('classes/:classId')
   async getClassPodcast(

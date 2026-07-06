@@ -29,8 +29,24 @@ describe('App', () => {
     await user.click(screen.getByText('Lecture 2 - Conditionals and loops'));
 
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Lecture 2 - Conditionals and loops' })).toBeInTheDocument());
-    const play = screen.getByRole('button', { name: 'Play' });
+    const play = screen.getAllByRole('button', { name: 'Play' }).at(-1);
+    expect(play).toBeDefined();
+    if (!play) return;
     await user.click(play);
-    expect(screen.getByRole('button', { name: 'Pause' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Pause' }).length).toBeGreaterThan(0);
+  });
+
+  it('keeps the player visible after leaving an episode detail page', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await screen.findByText('Lecture 1 - Python basics');
+    await user.click(screen.getByText('Lecture 2 - Conditionals and loops'));
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Lecture 2 - Conditionals and loops' })).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: 'Episodes' }));
+
+    expect(screen.getByRole('heading', { name: 'Episodes' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Now playing')).toHaveTextContent('Lecture 2 - Conditionals and loops');
   });
 });

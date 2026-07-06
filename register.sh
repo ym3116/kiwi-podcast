@@ -62,7 +62,7 @@ REG_RESPONSE=$(curl -sS -X POST "$KIWI/api/kiwi-apps/register" \
   -d "{
     \"slug\": \"$SLUG\",
     \"registrationSecret\": \"$SECRET\",
-    \"name\": \"Kiwi Podcast\",
+    \"name\": \"kiwi-podcast\",
     \"description\": \"External Kiwi App for podcast learning workflows\",
     \"baseUrl\": \"$APP_URL\",
     \"appType\": \"frontend_only\",
@@ -70,7 +70,7 @@ REG_RESPONSE=$(curl -sS -X POST "$KIWI/api/kiwi-apps/register" \
     \"uis\": [
       {
         \"uiSlug\": \"student\",
-        \"uiName\": \"Kiwi Podcast\",
+        \"uiName\": \"kiwi-podcast\",
         \"uiUrl\": \"$APP_URL\",
         \"placement\": \"class-tab\",
         \"allowedRoles\": [\"student\", \"ta\", \"instructor\", \"admin\"],

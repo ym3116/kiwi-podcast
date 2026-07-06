@@ -35,6 +35,11 @@ function extractDocuments(payload: KiwiMaterialsPayload): KiwiDocument[] {
   return [];
 }
 
+function isLectureDocument(document: KiwiDocument): boolean {
+  const materialType = document.materialType?.trim().toLowerCase();
+  return materialType === 'lecture' || materialType === 'class materials';
+}
+
 export function normalizePodcastPayload(
   classId: string,
   payload: KiwiMaterialsPayload,
@@ -43,8 +48,8 @@ export function normalizePodcastPayload(
     throw new Error(payload.error);
   }
 
-  const className = payload.className?.trim() || 'Class';
-  const documents = extractDocuments(payload);
+  const className = payload.className?.trim() || payload.name?.trim() || 'Class';
+  const documents = extractDocuments(payload).filter(isLectureDocument);
   const episodes: PodcastEpisode[] = documents.map((document, index) => {
     const lectureNumber = index + 1;
     const documentName = cleanDocumentName(document, index);

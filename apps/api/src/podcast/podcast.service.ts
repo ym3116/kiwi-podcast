@@ -1,11 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { KiwiMcpClient } from '../mcp/kiwi-mcp.client';
 import { KiwiMaterialsPayload, PodcastResponse } from '../types/podcast';
 import { normalizePodcastPayload } from './podcast-normalizer';
 
 @Injectable()
 export class PodcastService {
-  constructor(private readonly mcpClient: KiwiMcpClient) {}
+  constructor(@Inject(KiwiMcpClient) private readonly mcpClient: KiwiMcpClient) {}
 
   async getClassPodcast(classId: string, accessToken: string): Promise<PodcastResponse> {
     const materialsUri = `kiwi://class/${classId}/materials`;

@@ -34,6 +34,7 @@ export interface KiwiDocument {
 export interface KiwiMaterialsPayload {
   classId?: string;
   className?: string;
+  name?: string;
   description?: string;
   materials?: {
     documents?: KiwiDocument[];

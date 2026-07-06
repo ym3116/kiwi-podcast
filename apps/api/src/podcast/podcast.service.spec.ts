@@ -7,7 +7,7 @@ describe('PodcastService', () => {
     const mcpClient = {
       readResource: vi.fn().mockResolvedValue({
         className: 'Algorithms',
-        materials: { documents: [{ id: 'doc-1', fileName: 'graphs.pdf' }] },
+        materials: { documents: [{ id: 'doc-1', fileName: 'graphs.pdf', materialType: 'lecture' }] },
       }),
     };
 
@@ -27,7 +27,7 @@ describe('PodcastService', () => {
         .fn()
         .mockRejectedValueOnce(new Error('Unknown resource: class materials'))
         .mockResolvedValueOnce({
-          documents: [{ id: 'doc-1', fileName: 'recursion.pdf' }],
+          documents: [{ id: 'doc-1', fileName: 'recursion.pdf', materialType: 'lecture' }],
         }),
     };
 

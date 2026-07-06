@@ -159,7 +159,7 @@ the whitelist + secret. See `kiwi-app.controller.ts:119` and
 {
   "slug": "kiwi-podcast",
   "registrationSecret": "dev-secret",        // must match the whitelist entry
-  "name": "Kiwi Podcast",
+  "name": "kiwi-podcast",
   "description": "External Kiwi App for podcast learning workflows",
   "baseUrl": "http://localhost:8000",
   "appType": "frontend_only",                // or "full" (also exposes an MCP server)
@@ -168,7 +168,7 @@ the whitelist + secret. See `kiwi-app.controller.ts:119` and
   "uis": [
     {
       "uiSlug": "student",
-      "uiName": "Kiwi Podcast",
+      "uiName": "kiwi-podcast",
       "uiUrl": "http://localhost:8000",
       "placement": "class-tab",              // class-tab | admin-panel | modal | dashboard-widget
       "allowedRoles": ["student", "ta", "instructor", "admin"],
