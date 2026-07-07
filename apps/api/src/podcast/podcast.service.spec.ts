@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { KiwiMcpClient } from '../mcp/kiwi-mcp.client';
+import { PodcastGenerationService } from './podcast-generation.service';
 import { PodcastService } from './podcast.service';
+
+function generationServiceMock() {
+  return {
+    overlayEpisode: vi.fn(async (episode) => episode),
+  } as unknown as PodcastGenerationService;
+}
 
 describe('PodcastService', () => {
   it('reads class materials first', async () => {
@@ -11,7 +18,10 @@ describe('PodcastService', () => {
       }),
     };
 
-    const service = new PodcastService(mcpClient as unknown as KiwiMcpClient);
+    const service = new PodcastService(
+      mcpClient as unknown as KiwiMcpClient,
+      generationServiceMock(),
+    );
     const result = await service.getClassPodcast('class-1', 'token');
 
     expect(mcpClient.readResource).toHaveBeenCalledWith(
@@ -31,7 +41,10 @@ describe('PodcastService', () => {
         }),
     };
 
-    const service = new PodcastService(mcpClient as unknown as KiwiMcpClient);
+    const service = new PodcastService(
+      mcpClient as unknown as KiwiMcpClient,
+      generationServiceMock(),
+    );
     const result = await service.getClassPodcast('class-1', 'token');
 
     expect(mcpClient.readResource).toHaveBeenNthCalledWith(
@@ -47,7 +60,10 @@ describe('PodcastService', () => {
       readResource: vi.fn().mockRejectedValue(new Error('Access denied to class materials')),
     };
 
-    const service = new PodcastService(mcpClient as unknown as KiwiMcpClient);
+    const service = new PodcastService(
+      mcpClient as unknown as KiwiMcpClient,
+      generationServiceMock(),
+    );
 
     await expect(service.getClassPodcast('class-1', 'token')).rejects.toThrow(
       'Access denied to class materials',

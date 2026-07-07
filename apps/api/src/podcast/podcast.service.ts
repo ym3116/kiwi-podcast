@@ -1,11 +1,16 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { KiwiMcpClient } from '../mcp/kiwi-mcp.client';
 import { KiwiMaterialsPayload, PodcastResponse } from '../types/podcast';
+import { PodcastGenerationService } from './podcast-generation.service';
 import { normalizePodcastPayload } from './podcast-normalizer';
 
 @Injectable()
 export class PodcastService {
-  constructor(@Inject(KiwiMcpClient) private readonly mcpClient: KiwiMcpClient) {}
+  constructor(
+    @Inject(KiwiMcpClient) private readonly mcpClient: KiwiMcpClient,
+    @Inject(PodcastGenerationService)
+    private readonly generationService: PodcastGenerationService,
+  ) {}
 
   async getClassPodcast(classId: string, accessToken: string): Promise<PodcastResponse> {
     const materialsUri = `kiwi://class/${classId}/materials`;
@@ -16,7 +21,7 @@ export class PodcastService {
         accessToken,
         materialsUri,
       )) as KiwiMaterialsPayload;
-      return normalizePodcastPayload(classId, materials);
+      return this.withGeneratedArtifacts(normalizePodcastPayload(classId, materials));
     } catch (error) {
       const failedMessage = error instanceof Error ? error.message : String(error);
       if (!this.shouldFallback(failedMessage)) {
@@ -27,11 +32,32 @@ export class PodcastService {
         accessToken,
         documentsUri,
       )) as KiwiMaterialsPayload;
-      return normalizePodcastPayload(classId, documents);
+      return this.withGeneratedArtifacts(normalizePodcastPayload(classId, documents));
     }
+  }
+
+  async generateEpisode(classId: string, documentId: string) {
+    return this.generationService.generate(classId, documentId);
+  }
+
+  async getGenerationStatus(classId: string, documentId: string) {
+    return this.generationService.getStatus(classId, documentId);
+  }
+
+  getAudioPath(episodeId: string): string {
+    return this.generationService.getAudioPath(episodeId);
   }
 
   private shouldFallback(message: string): boolean {
     return /invalid uri|not found|unknown resource|class materials/i.test(message);
+  }
+
+  private async withGeneratedArtifacts(response: PodcastResponse): Promise<PodcastResponse> {
+    return {
+      ...response,
+      episodes: await Promise.all(
+        response.episodes.map((episode) => this.generationService.overlayEpisode(episode)),
+      ),
+    };
   }
 }
