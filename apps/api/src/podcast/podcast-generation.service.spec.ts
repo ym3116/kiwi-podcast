@@ -51,15 +51,49 @@ describe('PodcastGenerationService', () => {
     expect(store.statuses).toEqual(['generating', 'failed']);
     expect(result.job).toMatchObject({ status: 'failed', errorMessage: 'missing chunks' });
   });
+
+  it('reuses an active generation job instead of starting duplicate work', async () => {
+    const store = inMemoryStore();
+    store.nextBeginStarted = false;
+    const getChunks = vi.fn();
+    const service = new PodcastGenerationService(
+      { getChunks },
+      store as unknown as PodcastArtifactStore,
+      {} as ScriptGeneratorService,
+      {} as TtsService,
+    );
+
+    const result = await service.generate('class-1', 'doc-1');
+
+    expect(result.job).toMatchObject({ status: 'generating' });
+    expect(getChunks).not.toHaveBeenCalled();
+    expect(store.statuses).toEqual([]);
+  });
 });
 
 function inMemoryStore() {
   const jobs = new Map<string, any>();
   const scripts = new Map<string, any>();
   const statuses: string[] = [];
-  return {
+  const store = {
     statuses,
+    nextBeginStarted: true,
     readJob: vi.fn(async (episodeId: string) => jobs.get(episodeId) ?? null),
+    beginJob: vi.fn(async (episodeId: string, patch: any) => {
+      const job = {
+        episodeId,
+        classId: patch.classId,
+        documentId: patch.documentId,
+        status: 'generating',
+        updatedAt: new Date().toISOString(),
+      };
+      jobs.set(episodeId, job);
+      if (!store.nextBeginStarted) {
+        return { job, started: false };
+      }
+      statuses.push('generating');
+      return { job, started: true };
+    }),
     markJob: vi.fn(async (episodeId: string, patch: any) => {
       const job = {
         episodeId,
@@ -81,4 +115,5 @@ function inMemoryStore() {
     writeAudio: vi.fn(async (episodeId: string) => ({ audioPath: `/audio/${episodeId}.mp3` })),
     audioPath: vi.fn((episodeId: string) => `/audio/${episodeId}.mp3`),
   };
+  return store;
 }

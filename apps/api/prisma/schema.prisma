@@ -1,0 +1,122 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PodcastJobStatus {
+  placeholder
+  generating
+  ready
+  failed
+}
+
+model PodcastClass {
+  id          String           @id @default(uuid()) @db.Uuid
+  classId     String           @unique @map("class_id")
+  title       String
+  description String
+  coverTheme  String           @map("cover_theme")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+  documents   SourceDocument[]
+
+  @@map("podcast_classes")
+}
+
+model SourceDocument {
+  id             String           @id @default(uuid()) @db.Uuid
+  classId        String           @map("class_id")
+  kiwiDocumentId String           @map("kiwi_document_id")
+  documentName   String           @map("document_name")
+  materialType   String           @map("material_type")
+  lectureNumber  Int              @map("lecture_number")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+  podcastClass   PodcastClass     @relation(fields: [classId], references: [classId], onDelete: Cascade)
+  episode        PodcastEpisode?
+
+  @@unique([classId, kiwiDocumentId])
+  @@index([classId])
+  @@map("source_documents")
+}
+
+model PodcastEpisode {
+  id               String             @id @default(uuid()) @db.Uuid
+  episodeId        String             @unique @map("episode_id")
+  classId          String             @map("class_id")
+  kiwiDocumentId   String             @map("kiwi_document_id")
+  sourceDocumentId String             @unique @map("source_document_id") @db.Uuid
+  title            String
+  durationLabel    String             @map("duration_label")
+  status           PodcastJobStatus   @default(placeholder)
+  generatedAt      DateTime?          @map("generated_at")
+  errorMessage     String?            @map("error_message")
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
+  sourceDocument   SourceDocument     @relation(fields: [sourceDocumentId], references: [id], onDelete: Cascade)
+  jobs             GenerationJob[]
+  scripts          PodcastScript[]
+  audioAssets      PodcastAudioAsset[]
+
+  @@unique([classId, kiwiDocumentId])
+  @@index([classId])
+  @@map("podcast_episodes")
+}
+
+model GenerationJob {
+  id             String             @id @default(uuid()) @db.Uuid
+  episodeId      String             @map("episode_id")
+  classId        String             @map("class_id")
+  kiwiDocumentId String             @map("kiwi_document_id")
+  status         PodcastJobStatus
+  inputMetadata  Json?              @map("input_metadata")
+  errorMessage   String?            @map("error_message")
+  startedAt      DateTime           @default(now()) @map("started_at")
+  finishedAt     DateTime?          @map("finished_at")
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+  episode        PodcastEpisode     @relation(fields: [episodeId], references: [episodeId], onDelete: Cascade)
+  script         PodcastScript?
+  audioAsset     PodcastAudioAsset?
+
+  @@index([episodeId, createdAt])
+  @@index([classId, kiwiDocumentId])
+  @@map("generation_jobs")
+}
+
+model PodcastScript {
+  id                    String          @id @default(uuid()) @db.Uuid
+  episodeId             String          @map("episode_id")
+  jobId                 String          @unique @map("job_id") @db.Uuid
+  title                 String
+  summary               String
+  durationTargetMinutes Int             @map("duration_target_minutes")
+  turns                 Json
+  createdAt             DateTime        @default(now()) @map("created_at")
+  episode               PodcastEpisode  @relation(fields: [episodeId], references: [episodeId], onDelete: Cascade)
+  job                   GenerationJob   @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([episodeId, createdAt])
+  @@map("podcast_scripts")
+}
+
+model PodcastAudioAsset {
+  id         String          @id @default(uuid()) @db.Uuid
+  episodeId  String          @map("episode_id")
+  jobId      String          @unique @map("job_id") @db.Uuid
+  storageKey String          @map("storage_key")
+  filePath   String          @map("file_path")
+  mimeType   String          @map("mime_type")
+  byteSize   Int             @map("byte_size")
+  checksum   String
+  createdAt  DateTime        @default(now()) @map("created_at")
+  episode    PodcastEpisode  @relation(fields: [episodeId], references: [episodeId], onDelete: Cascade)
+  job        GenerationJob   @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([episodeId, createdAt])
+  @@map("podcast_audio_assets")
+}

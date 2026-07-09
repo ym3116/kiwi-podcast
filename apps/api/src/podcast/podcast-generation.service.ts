@@ -22,11 +22,13 @@ export class PodcastGenerationService {
       return { job: existing, episode: await this.episodeFromJob(existing) };
     }
 
-    await this.artifacts.markJob(episodeId, {
+    const started = await this.artifacts.beginJob(episodeId, {
       classId,
       documentId,
-      status: 'generating',
     });
+    if (!started.started) {
+      return { job: started.job, episode: await this.episodeFromJob(started.job) };
+    }
 
     try {
       const chunks = await this.chunkSource.getChunks(classId, documentId);
@@ -70,6 +72,10 @@ export class PodcastGenerationService {
       status: 'placeholder',
       updatedAt: new Date().toISOString(),
     };
+  }
+
+  async syncPodcastCatalog(response: import('../types/podcast').PodcastResponse): Promise<void> {
+    await this.artifacts.syncCatalog(response);
   }
 
   async overlayEpisode(episode: PodcastEpisode): Promise<PodcastEpisode> {

@@ -76,10 +76,23 @@ Run it from the repo root:
 
 ```bash
 npm install
+npm run db:generate -w apps/api
 npm run dev
 ```
 
 Then open `http://localhost:8000`.
+
+The podcast API persists generated podcast metadata, scripts, job status, and
+audio asset records in PostgreSQL. MP3 bytes are stored outside the database in
+`PODCAST_AUDIO_DIR` so media storage can later move to object storage without
+changing the public iframe protocol. For the full local stack, use:
+
+```bash
+npm run docker:up
+```
+
+Docker Compose starts PostgreSQL on `localhost:5432`, the API on
+`http://localhost:8010`, and the web iframe app on `http://localhost:8000`.
 
 A Kiwi App is just a web page that does the handshake. The smallest possible
 version of the pattern looks like this:

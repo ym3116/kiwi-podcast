@@ -21,7 +21,7 @@ export class PodcastService {
         accessToken,
         materialsUri,
       )) as KiwiMaterialsPayload;
-      return this.withGeneratedArtifacts(normalizePodcastPayload(classId, materials));
+      return this.withStoredCatalog(normalizePodcastPayload(classId, materials));
     } catch (error) {
       const failedMessage = error instanceof Error ? error.message : String(error);
       if (!this.shouldFallback(failedMessage)) {
@@ -32,7 +32,7 @@ export class PodcastService {
         accessToken,
         documentsUri,
       )) as KiwiMaterialsPayload;
-      return this.withGeneratedArtifacts(normalizePodcastPayload(classId, documents));
+      return this.withStoredCatalog(normalizePodcastPayload(classId, documents));
     }
   }
 
@@ -59,5 +59,10 @@ export class PodcastService {
         response.episodes.map((episode) => this.generationService.overlayEpisode(episode)),
       ),
     };
+  }
+
+  private async withStoredCatalog(response: PodcastResponse): Promise<PodcastResponse> {
+    await this.generationService.syncPodcastCatalog(response);
+    return this.withGeneratedArtifacts(response);
   }
 }

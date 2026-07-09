@@ -16,19 +16,143 @@ hello-world example.
 - `KIWI_APP_DEVELOPER_GUIDE.md`: detailed Kiwi App protocol notes.
 - `AGENTS.md`: repo-level instructions for coding agents.
 
-## Run Locally
+## Run With Docker
 
-From the repo root:
+Docker is the recommended way to run the full app locally. It keeps PostgreSQL,
+API dependencies, generated audio, and database files inside Docker-managed
+images, containers, and volumes instead of installing PostgreSQL directly on
+your Mac.
 
 ```bash
-npm install
-npm run dev
+docker compose up --build
 ```
 
-This starts:
+This exposes:
 
 - Web app: `http://localhost:8000`
 - REST API: `http://localhost:8010`
+- PostgreSQL: internal Docker service `postgres:5432`
+
+Docker uses named volumes for persistent generated data:
+
+- `kiwi-podcast_postgres-data`: PostgreSQL database files.
+- `kiwi-podcast_podcast-audio`: generated MP3 files.
+
+The API reads local demo chunks from `apps/api/demo-chunks` as a read-only bind
+mount. Those chunks are source input for generation; generated podcast metadata
+and audio are stored in Docker volumes.
+
+For real podcast generation, create a root `.env` file with your model
+credentials. Docker Compose reads this file automatically and passes the values
+to the API container:
+
+```text
+LLM_BASE_URL=https://your-openai-compatible-provider.example
+LLM_API_KEY=...
+LLM_MODEL=...
+TTS_API_KEY=...
+```
+
+Do not commit `.env`; it is ignored by git.
+
+Stop the stack without deleting generated data:
+
+```bash
+docker compose down
+```
+
+Delete the Docker database and generated audio when you want a clean slate:
+
+```bash
+docker compose down -v
+```
+
+Run checks inside Docker instead of using local `node_modules`:
+
+```bash
+docker compose run --rm api npm run build -w apps/api
+docker compose run --rm api npm run test -w apps/api
+docker compose run --rm api npm run lint -w apps/api
+docker compose run --rm web npm run build -w apps/web
+docker compose run --rm web npm run test -w apps/web
+docker compose run --rm web npm run lint -w apps/web
+```
+
+The first run may take longer because Docker builds the images and installs npm
+dependencies inside those images.
+
+## Regenerate A Demo Podcast
+
+Older local runs may have written generated podcast artifacts under the ignored
+folder `apps/api/apps/api/.podcasts`. Docker Compose mounts that folder
+read-only into the API container as `/data/legacy-podcasts`.
+
+To import those legacy JSON/audio artifacts into PostgreSQL and the Docker audio
+volume, start the stack, then run:
+
+```bash
+docker compose run --rm api npm run podcasts:import-legacy -w apps/api
+```
+
+The import is idempotent. It upserts class, document, episode, generation job,
+script, and audio asset records into PostgreSQL, and copies MP3 files into the
+`kiwi-podcast_podcast-audio` Docker volume.
+
+After import, verify the known legacy episode:
+
+```bash
+curl -H "Authorization: Bearer local-dev-token" \
+  http://localhost:8010/api/podcast/classes/1ef1daa0-6f00-4c52-b13f-fa85b65b3e31/episodes/49d054f2-2a9c-44f1-9a9f-43d67d77a01a/status
+```
+
+Once imported and verified, `apps/api/apps`, `apps/api/dist`, and
+`apps/api/node_modules` are disposable local artifacts. They are ignored by git
+and are not needed by Docker.
+
+If you prefer a clean rebuild instead of importing, keep the local demo chunk
+file for document `49d054f2-2a9c-44f1-9a9f-43d67d77a01a`; it is mounted
+read-only into the API container as generation input.
+
+After `docker compose up --build` is running, generate that podcast episode with
+the same API path the app uses:
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer local-dev-token" \
+  http://localhost:8010/api/podcast/classes/1ef1daa0-6f00-4c52-b13f-fa85b65b3e31/episodes/49d054f2-2a9c-44f1-9a9f-43d67d77a01a/generate
+```
+
+Then check status:
+
+```bash
+curl -H "Authorization: Bearer local-dev-token" \
+  http://localhost:8010/api/podcast/classes/1ef1daa0-6f00-4c52-b13f-fa85b65b3e31/episodes/49d054f2-2a9c-44f1-9a9f-43d67d77a01a/status
+```
+
+If generation succeeds, the DB rows are in the Docker PostgreSQL volume and the
+MP3 is in the Docker audio volume. If generation fails because `TTS_API_KEY` or
+LLM settings are missing, the failed job is still stored in PostgreSQL.
+
+## Optional Non-Docker Checks
+
+You do not need local Node dependencies to run the Docker app. If you want fast
+local TypeScript/tests outside Docker, use:
+
+```bash
+npm install
+npm run db:generate -w apps/api
+npm run build
+npm run test
+npm run lint
+```
+
+For non-Docker API development with a local PostgreSQL server, set
+`DATABASE_URL` and `PODCAST_AUDIO_DIR` in `apps/api/.env`, then run:
+
+```bash
+npm run db:migrate -w apps/api
+npm run dev
+```
 
 When opened outside Kiwi, the app switches to Simulator mode and fakes Kiwi
 context, token, and podcast episodes locally. This keeps frontend development
@@ -39,6 +163,9 @@ Useful single-workspace commands:
 ```bash
 npm run dev:web
 npm run dev:api
+npm run db:generate -w apps/api
+npm run db:migrate -w apps/api
+npm run db:studio -w apps/api
 npm run build
 npm run test
 npm run lint
@@ -97,10 +224,11 @@ The app uses these Kiwi integration pieces:
 | Context grounding | `kiwi:updateContext` | Sends app state to Kiwi for future AI grounding. |
 | REST | `GET /api/podcast/classes/:classId` | Frontend calls the local podcast API with the app token. |
 | MCP | Kiwi `POST /mcp` Streamable HTTP | The podcast API initializes an MCP session and reads class materials/documents. |
+| Storage | PostgreSQL + audio volume | Generated metadata/scripts/jobs live in PostgreSQL; MP3 files live in `PODCAST_AUDIO_DIR`. |
 
-The first version returns placeholder scripts and no audio. Future podcast
-generation can use the same backend path to read document embeddings, generate
-scripts/audio, and add persistence.
+The API returns placeholder scripts until an episode is generated. Generation
+uses the backend path to read chunks, create scripts/audio, persist metadata in
+PostgreSQL, and serve MP3 files from the configured audio directory.
 
 ## Development Rules
 
@@ -114,6 +242,7 @@ scripts/audio, and add persistence.
 
 ```bash
 bash -n register.sh
+npm run db:generate -w apps/api
 npm run build
 npm run test
 ```

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { DatabaseModule } from './database/database.module';
 import { HealthController } from './health/health.controller';
 import { KiwiMcpClient } from './mcp/kiwi-mcp.client';
 import { LocalDemoChunkSource } from './podcast/local-demo-chunk-source';
@@ -10,6 +11,7 @@ import { ScriptGeneratorService } from './podcast/script-generator.service';
 import { TtsService } from './podcast/tts.service';
 
 @Module({
+  imports: [DatabaseModule],
   controllers: [HealthController, PodcastController],
   providers: [
     KiwiMcpClient,
