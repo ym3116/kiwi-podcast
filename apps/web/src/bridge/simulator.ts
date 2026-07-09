@@ -2,8 +2,8 @@ import { PodcastResponse } from '../types/podcast';
 import { KiwiAppToken, KiwiContext } from './types';
 
 export const simulatorContext: KiwiContext = {
-  classId: 'sim-class-intro-cs',
-  className: 'Introduction to Computer Programming',
+  classId: '1ef1daa0-6f00-4c52-b13f-fa85b65b3e31',
+  className: 'Regularization',
   userId: 'sim-user-1',
   username: 'Student Demo',
   userRole: 'student',
@@ -22,7 +22,7 @@ export const simulatorToken: KiwiAppToken = {
 
 export const simulatorPodcast: PodcastResponse = {
   podcast: {
-    id: 'podcast-sim-class-intro-cs',
+    id: 'podcast-1ef1daa0-6f00-4c52-b13f-fa85b65b3e31',
     classId: simulatorContext.classId,
     title: `${simulatorContext.className} - Podcast`,
     description:
@@ -31,16 +31,16 @@ export const simulatorPodcast: PodcastResponse = {
   },
   episodes: [
     {
-      id: 'episode-sim-1',
-      documentId: 'doc-sim-1',
-      title: 'Lecture 1 - Python basics',
+      id: 'episode-49d054f2-2a9c-44f1-9a9f-43d67d77a01a',
+      documentId: '49d054f2-2a9c-44f1-9a9f-43d67d77a01a',
+      title: 'Lecture 14 - Regularization 2',
       lectureNumber: 1,
-      documentName: 'Python basics',
-      materialType: 'lecture',
-      durationLabel: '11 min',
+      documentName: '14_regularization_2',
+      materialType: 'class materials',
+      durationLabel: '15 min',
       status: 'placeholder',
       script:
-        'Welcome to Lecture 1. Today we introduce the mental model for Python programs: values, names, expressions, and the way the interpreter evaluates each line. In the finished version, this script will be generated from Kiwi document embeddings.',
+        'Generate this episode to create a podcast from the local demo chunks for regularization and Lasso regression.',
     },
     {
       id: 'episode-sim-2',

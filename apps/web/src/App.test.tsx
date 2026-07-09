@@ -1,38 +1,62 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
+
+const generatedEpisode = {
+  id: 'episode-49d054f2-2a9c-44f1-9a9f-43d67d77a01a',
+  documentId: '49d054f2-2a9c-44f1-9a9f-43d67d77a01a',
+  title: 'Understanding Lasso Regression',
+  lectureNumber: 1,
+  documentName: '14_regularization_2',
+  materialType: 'class materials',
+  durationLabel: '15 min',
+  script: 'HOST_A: Welcome to Lasso regression.\n\nHOST_B: Lasso encourages sparse models.',
+  status: 'ready' as const,
+  audioUrl: 'http://localhost:8010/api/podcast/audio/episode-49d054f2-2a9c-44f1-9a9f-43d67d77a01a',
+};
 
 describe('App', () => {
   beforeEach(() => {
     (window as Window & { __KIWI_PODCAST_FORCE_MODE__?: 'simulator' })
       .__KIWI_PODCAST_FORCE_MODE__ = 'simulator';
+    vi.spyOn(window.HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+    vi.spyOn(window.HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ job: { ...generatedEpisode, episodeId: generatedEpisode.id, classId: '1ef1daa0-6f00-4c52-b13f-fa85b65b3e31' }, episode: generatedEpisode }),
+      })),
+    );
   });
 
   afterEach(() => {
     delete (window as Window & { __KIWI_PODCAST_FORCE_MODE__?: string })
       .__KIWI_PODCAST_FORCE_MODE__;
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it('renders simulator podcast episodes', async () => {
     render(<App />);
 
-    expect(await screen.findByText('Introduction to Computer Programming - Podcast')).toBeInTheDocument();
-    expect(screen.getByText('Lecture 1 - Python basics')).toBeInTheDocument();
+    expect(await screen.findByText('Regularization - Podcast')).toBeInTheDocument();
+    expect(screen.getByText('Lecture 14 - Regularization 2')).toBeInTheDocument();
   });
 
   it('opens an episode detail and toggles play state', async () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await screen.findByText('Lecture 1 - Python basics');
-    await user.click(screen.getByText('Lecture 2 - Conditionals and loops'));
+    await screen.findByText('Lecture 14 - Regularization 2');
+    await user.click(screen.getByText('Lecture 14 - Regularization 2'));
 
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Lecture 2 - Conditionals and loops' })).toBeInTheDocument());
-    const play = screen.getAllByRole('button', { name: 'Play' }).at(-1);
-    expect(play).toBeDefined();
-    if (!play) return;
-    await user.click(play);
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Lecture 14 - Regularization 2' })).toBeInTheDocument());
+    const generate = screen.getAllByRole('button', { name: 'Generate' }).at(-1);
+    expect(generate).toBeDefined();
+    if (!generate) return;
+    await user.click(generate);
     expect(screen.getAllByRole('button', { name: 'Pause' }).length).toBeGreaterThan(0);
   });
 
@@ -40,13 +64,13 @@ describe('App', () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await screen.findByText('Lecture 1 - Python basics');
-    await user.click(screen.getByText('Lecture 2 - Conditionals and loops'));
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Lecture 2 - Conditionals and loops' })).toBeInTheDocument());
+    await screen.findByText('Lecture 14 - Regularization 2');
+    await user.click(screen.getByText('Lecture 14 - Regularization 2'));
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Lecture 14 - Regularization 2' })).toBeInTheDocument());
 
     await user.click(screen.getByRole('button', { name: 'Episodes' }));
 
     expect(screen.getByRole('heading', { name: 'Episodes' })).toBeInTheDocument();
-    expect(screen.getByLabelText('Now playing')).toHaveTextContent('Lecture 2 - Conditionals and loops');
+    expect(screen.getByLabelText('Now playing')).toHaveTextContent('Lecture 14 - Regularization 2');
   });
 });

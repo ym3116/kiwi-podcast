@@ -13,7 +13,9 @@ describe('useKiwiBridge', () => {
       .__KIWI_PODCAST_FORCE_MODE__ = 'simulator';
     const { result } = renderHook(() => useKiwiBridge());
 
-    await waitFor(() => expect(result.current.context?.classId).toBe('sim-class-intro-cs'));
+    await waitFor(() =>
+      expect(result.current.context?.classId).toBe('1ef1daa0-6f00-4c52-b13f-fa85b65b3e31'),
+    );
     expect(result.current.mode).toBe('simulator');
     expect(result.current.token?.accessToken).toBe('simulated-kiwi-app-token');
   });

@@ -1,6 +1,6 @@
 import { AlertCircle, Headphones, Loader2, Radio } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { fetchClassPodcast } from './api/podcastApi';
+import { fetchClassPodcast, generatePodcastEpisode } from './api/podcastApi';
 import { simulatorPodcast } from './bridge/simulator';
 import { useKiwiBridge } from './bridge/useKiwiBridge';
 import { EpisodeDetail } from './components/EpisodeDetail';
@@ -40,6 +40,9 @@ export function App() {
   const [currentTime, setCurrentTime] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [generatingId, setGeneratingId] = useState<string | null>(null);
+  const [generationError, setGenerationError] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const previousEpisodeId = useRef<string | null>(null);
 
   useEffect(() => {
@@ -104,7 +107,7 @@ export function App() {
   }, [currentEpisodeId]);
 
   useEffect(() => {
-    if (!playingId || !currentEpisode) return;
+    if (!playingId || !currentEpisode || currentEpisode.audioUrl) return;
 
     const timer = window.setInterval(() => {
       setCurrentTime((time) => {
@@ -121,16 +124,116 @@ export function App() {
     return () => window.clearInterval(timer);
   }, [currentEpisode, durationSeconds, playbackRate, playingId]);
 
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio || !currentEpisode?.audioUrl) return;
+
+    audio.pause();
+    audio.src = currentEpisode.audioUrl;
+    audio.currentTime = 0;
+    audio.playbackRate = playbackRate;
+    setCurrentTime(0);
+
+    if (playingId === currentEpisode.id) {
+      void audio.play().catch((error) => {
+        setGenerationError(error instanceof Error ? error.message : 'Unable to play generated audio.');
+        setPlayingId(null);
+      });
+    }
+  }, [currentEpisode?.audioUrl, currentEpisode?.id]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio || !currentEpisode?.audioUrl) return;
+    audio.playbackRate = playbackRate;
+  }, [currentEpisode?.audioUrl, playbackRate]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio || !currentEpisode?.audioUrl) return;
+
+    if (playingId === currentEpisode.id) {
+      void audio.play().catch((error) => {
+        setGenerationError(error instanceof Error ? error.message : 'Unable to play generated audio.');
+        setPlayingId(null);
+      });
+    } else {
+      audio.pause();
+    }
+  }, [currentEpisode, playingId]);
+
+  const updateEpisode = (episode: PodcastEpisode) => {
+    setPodcastData((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        episodes: current.episodes.map((item) =>
+          item.id === episode.id
+            ? {
+                ...item,
+                ...episode,
+              }
+            : item,
+        ),
+      };
+    });
+  };
+
+  const ensureGeneratedEpisode = async (episode: PodcastEpisode): Promise<PodcastEpisode> => {
+    if (episode.status === 'ready' && episode.audioUrl) return episode;
+    if (!bridge.context || !bridge.token?.accessToken) {
+      throw new Error('Podcast generation needs Kiwi context and an app token.');
+    }
+
+    setGeneratingId(episode.id);
+    setGenerationError(null);
+    try {
+      const result = await generatePodcastEpisode(
+        bridge.context.classId,
+        episode.documentId,
+        bridge.token.accessToken,
+      );
+      const nextEpisode =
+        result.episode ??
+        ({
+          ...episode,
+          status: result.job.status,
+          audioUrl: result.job.audioUrl,
+          generatedAt: result.job.generatedAt,
+          errorMessage: result.job.errorMessage,
+        } satisfies PodcastEpisode);
+      updateEpisode(nextEpisode);
+      if (nextEpisode.status !== 'ready' || !nextEpisode.audioUrl) {
+        throw new Error(nextEpisode.errorMessage || 'Podcast generation did not produce audio yet.');
+      }
+      return nextEpisode;
+    } finally {
+      setGeneratingId(null);
+    }
+  };
+
   const selectEpisode = (episode: PodcastEpisode) => {
     setSelectedEpisodeId(episode.id);
     setCurrentEpisodeId(episode.id);
     window.history.replaceState(null, '', `#${episode.id}`);
   };
 
-  const playEpisode = (episode: PodcastEpisode) => {
+  const playEpisode = async (episode: PodcastEpisode) => {
     setSelectedEpisodeId(episode.id);
     setCurrentEpisodeId(episode.id);
-    setPlayingId((current) => (current === episode.id ? null : episode.id));
+    if (playingId === episode.id) {
+      setPlayingId(null);
+      return;
+    }
+
+    try {
+      const generated = await ensureGeneratedEpisode(episode);
+      setCurrentEpisodeId(generated.id);
+      setPlayingId(generated.id);
+    } catch (error) {
+      setGenerationError(error instanceof Error ? error.message : 'Unable to generate podcast audio.');
+      setPlayingId(null);
+    }
   };
 
   const playAll = () => {
@@ -138,19 +241,26 @@ export function App() {
     if (!firstEpisode) return;
     setSelectedEpisodeId(firstEpisode.id);
     setCurrentEpisodeId(firstEpisode.id);
-    setPlayingId(firstEpisode.id);
+    void playEpisode(firstEpisode);
   };
 
   const toggleCurrentEpisode = () => {
     if (!currentEpisode) return;
-    setPlayingId((current) => (current === currentEpisode.id ? null : currentEpisode.id));
+    void playEpisode(currentEpisode);
   };
 
   const seek = (time: number) => {
+    if (audioRef.current && currentEpisode?.audioUrl) {
+      audioRef.current.currentTime = Math.max(0, Math.min(time, durationSeconds));
+    }
     setCurrentTime(Math.max(0, Math.min(time, durationSeconds)));
   };
 
   const skip = (delta: number) => {
+    if (audioRef.current && currentEpisode?.audioUrl) {
+      seek(audioRef.current.currentTime + delta);
+      return;
+    }
     setCurrentTime((time) => Math.max(0, Math.min(time + delta, durationSeconds)));
   };
 
@@ -188,6 +298,12 @@ export function App() {
         />
       ) : null}
 
+      <audio
+        ref={audioRef}
+        onEnded={() => setPlayingId(null)}
+        onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
+      />
+
       {loadState === 'loading' || loadState === 'idle' ? (
         <div className="center-state">
           <Loader2 className="spin" size={30} />
@@ -214,6 +330,7 @@ export function App() {
           onPlayAll={playAll}
           onPlayEpisode={playEpisode}
           onRefresh={() => setRefreshKey((key) => key + 1)}
+          generatingId={generatingId}
         />
       ) : null}
 
@@ -222,6 +339,8 @@ export function App() {
           podcast={podcastData.podcast}
           episode={selectedEpisode}
           isPlaying={playingId === selectedEpisode.id}
+          isGenerating={generatingId === selectedEpisode.id}
+          generationError={generationError}
           onBack={() => setSelectedEpisodeId(null)}
           onTogglePlay={() => playEpisode(selectedEpisode)}
         />

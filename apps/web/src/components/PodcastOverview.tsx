@@ -1,4 +1,4 @@
-import { Clock, FileText, ListMusic, Play, RotateCw } from 'lucide-react';
+import { Clock, FileText, ListMusic, Loader2, Play, RotateCw } from 'lucide-react';
 import { PodcastEpisode, PodcastResponse } from '../types/podcast';
 import { PodcastCover } from './PodcastCover';
 
@@ -8,8 +8,9 @@ interface PodcastOverviewProps {
   playingId: string | null;
   onSelectEpisode: (episode: PodcastEpisode) => void;
   onPlayAll: () => void;
-  onPlayEpisode: (episode: PodcastEpisode) => void;
+  onPlayEpisode: (episode: PodcastEpisode) => void | Promise<void>;
   onRefresh: () => void;
+  generatingId: string | null;
 }
 
 export function PodcastOverview({
@@ -20,6 +21,7 @@ export function PodcastOverview({
   onPlayAll,
   onPlayEpisode,
   onRefresh,
+  generatingId,
 }: PodcastOverviewProps) {
   return (
     <main className="page-shell">
@@ -64,44 +66,52 @@ export function PodcastOverview({
           </div>
         ) : (
           <div className="episode-list">
-            {data.episodes.map((episode) => (
-              <article
-                className={episode.id === activeEpisodeId ? 'episode-row active' : 'episode-row'}
-                key={episode.id}
-              >
-                <button
-                  className="episode-main"
-                  type="button"
-                  onClick={() => onSelectEpisode(episode)}
+            {data.episodes.map((episode) => {
+              const isGenerating = generatingId === episode.id;
+              return (
+                <article
+                  className={episode.id === activeEpisodeId ? 'episode-row active' : 'episode-row'}
+                  key={episode.id}
                 >
-                  <div className="episode-thumb">
-                    <span>{episode.lectureNumber}</span>
-                  </div>
-                  <div className="episode-text">
-                    <div className="episode-kicker">Lecture {episode.lectureNumber}</div>
-                    <h3>{episode.title}</h3>
-                    <p>{episode.script}</p>
-                  </div>
-                </button>
-                <div className="episode-side">
-                  <span className="duration">
-                    <Clock size={15} />
-                    {episode.durationLabel}
-                  </span>
                   <button
-                    className="round-play"
+                    className="episode-main"
                     type="button"
-                    aria-label={`Play ${episode.title}`}
-                    onClick={() => onPlayEpisode(episode)}
+                    onClick={() => onSelectEpisode(episode)}
                   >
-                    <Play
-                      size={16}
-                      fill={playingId === episode.id ? 'currentColor' : 'none'}
-                    />
+                    <div className="episode-thumb">
+                      <span>{episode.lectureNumber}</span>
+                    </div>
+                    <div className="episode-text">
+                      <div className="episode-kicker">Lecture {episode.lectureNumber}</div>
+                      <h3>{episode.title}</h3>
+                      <p>{episode.script}</p>
+                    </div>
                   </button>
-                </div>
-              </article>
-            ))}
+                  <div className="episode-side">
+                    <span className="duration">
+                      <Clock size={15} />
+                      {episode.durationLabel}
+                    </span>
+                    <button
+                      className="round-play"
+                      type="button"
+                      aria-label={`${episode.status === 'ready' ? 'Play' : 'Generate'} ${episode.title}`}
+                      disabled={isGenerating}
+                      onClick={() => onPlayEpisode(episode)}
+                    >
+                      {isGenerating ? (
+                        <Loader2 className="spin" size={16} />
+                      ) : (
+                        <Play
+                          size={16}
+                          fill={playingId === episode.id ? 'currentColor' : 'none'}
+                        />
+                      )}
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         )}
       </section>

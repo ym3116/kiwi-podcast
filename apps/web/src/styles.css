@@ -378,6 +378,12 @@ p {
   background: var(--purple-dark);
 }
 
+.primary-button:disabled,
+.round-play:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
 .icon-button,
 .back-button {
   min-height: 44px;
@@ -507,6 +513,16 @@ p {
 
 .round-play:hover {
   background: rgba(122, 40, 219, 0.17);
+}
+
+.generation-error {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 12px;
+  color: #b42318;
+  font-size: 14px;
+  font-weight: 650;
 }
 
 .back-button {

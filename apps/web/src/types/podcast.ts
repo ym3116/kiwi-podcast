@@ -16,6 +16,9 @@ export interface PodcastEpisode {
   durationLabel: string;
   script: string;
   status: 'placeholder' | 'generating' | 'ready' | 'failed';
+  audioUrl?: string;
+  generatedAt?: string;
+  errorMessage?: string;
 }
 
 export interface PodcastResponse {

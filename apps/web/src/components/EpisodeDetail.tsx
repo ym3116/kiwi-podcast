@@ -1,4 +1,4 @@
-import { ArrowLeft, Clock, FileText, Pause, Play } from 'lucide-react';
+import { ArrowLeft, AlertCircle, Clock, FileText, Loader2, Pause, Play } from 'lucide-react';
 import { PodcastEpisode, PodcastSummary } from '../types/podcast';
 import { PodcastCover } from './PodcastCover';
 
@@ -6,17 +6,24 @@ interface EpisodeDetailProps {
   podcast: PodcastSummary;
   episode: PodcastEpisode;
   isPlaying: boolean;
+  isGenerating: boolean;
+  generationError: string | null;
   onBack: () => void;
-  onTogglePlay: () => void;
+  onTogglePlay: () => void | Promise<void>;
 }
 
 export function EpisodeDetail({
   podcast,
   episode,
   isPlaying,
+  isGenerating,
+  generationError,
   onBack,
   onTogglePlay,
 }: EpisodeDetailProps) {
+  const canPlay = episode.status === 'ready' && episode.audioUrl;
+  const actionLabel = isGenerating ? 'Generating' : canPlay ? (isPlaying ? 'Pause' : 'Play') : 'Generate';
+
   return (
     <main className="page-shell">
       <button className="back-button" type="button" onClick={onBack}>
@@ -36,10 +43,22 @@ export function EpisodeDetail({
           </div>
           <h1>{episode.title}</h1>
           <p>{podcast.title}</p>
-          <button className="primary-button" type="button" onClick={onTogglePlay}>
-            {isPlaying ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />}
-            {isPlaying ? 'Pause' : 'Play'}
+          <button className="primary-button" type="button" onClick={onTogglePlay} disabled={isGenerating}>
+            {isGenerating ? (
+              <Loader2 className="spin" size={18} />
+            ) : isPlaying ? (
+              <Pause size={18} fill="currentColor" />
+            ) : (
+              <Play size={18} fill="currentColor" />
+            )}
+            {actionLabel}
           </button>
+          {generationError ? (
+            <p className="generation-error">
+              <AlertCircle size={16} />
+              {generationError}
+            </p>
+          ) : null}
         </div>
       </section>
 
@@ -55,10 +74,12 @@ export function EpisodeDetail({
           {episode.script.split('\n\n').map((paragraph) => (
             <p key={paragraph}>{paragraph}</p>
           ))}
-          <p>
-            Background reading: {episode.documentName}. This episode is marked as{' '}
-            {episode.status} until generated audio and full scripts are added.
-          </p>
+          {episode.status !== 'ready' ? (
+            <p>
+              Background reading: {episode.documentName}. Generate this episode to create
+              audio and a full script from the source chunks.
+            </p>
+          ) : null}
         </div>
       </section>
     </main>
