@@ -38,6 +38,7 @@ export function App() {
   const [currentEpisodeId, setCurrentEpisodeId] = useState<string | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
+  const [audioDuration, setAudioDuration] = useState<number | null>(null);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
   const [generatingId, setGeneratingId] = useState<string | null>(null);
@@ -94,15 +95,17 @@ export function App() {
     return podcastData.episodes.find((episode) => episode.id === currentEpisodeId) ?? null;
   }, [currentEpisodeId, podcastData]);
 
-  const durationSeconds = useMemo(
+  const fallbackDurationSeconds = useMemo(
     () => durationToSeconds(currentEpisode?.durationLabel),
     [currentEpisode],
   );
+  const durationSeconds = currentEpisode?.audioUrl && audioDuration ? audioDuration : fallbackDurationSeconds;
 
   useEffect(() => {
     if (previousEpisodeId.current !== currentEpisodeId) {
       previousEpisodeId.current = currentEpisodeId;
       setCurrentTime(0);
+      setAudioDuration(null);
     }
   }, [currentEpisodeId]);
 
@@ -133,6 +136,7 @@ export function App() {
     audio.currentTime = 0;
     audio.playbackRate = playbackRate;
     setCurrentTime(0);
+    setAudioDuration(Number.isFinite(audio.duration) ? audio.duration : null);
 
     if (playingId === currentEpisode.id) {
       void audio.play().catch((error) => {
@@ -218,8 +222,13 @@ export function App() {
     window.history.replaceState(null, '', `#${episode.id}`);
   };
 
-  const playEpisode = async (episode: PodcastEpisode) => {
-    setSelectedEpisodeId(episode.id);
+  const playEpisode = async (
+    episode: PodcastEpisode,
+    options: { openDetail?: boolean } = { openDetail: true },
+  ) => {
+    if (options.openDetail) {
+      setSelectedEpisodeId(episode.id);
+    }
     setCurrentEpisodeId(episode.id);
     if (playingId === episode.id) {
       setPlayingId(null);
@@ -246,14 +255,15 @@ export function App() {
 
   const toggleCurrentEpisode = () => {
     if (!currentEpisode) return;
-    void playEpisode(currentEpisode);
+    void playEpisode(currentEpisode, { openDetail: false });
   };
 
   const seek = (time: number) => {
+    const nextTime = Math.max(0, Math.min(time, durationSeconds));
     if (audioRef.current && currentEpisode?.audioUrl) {
-      audioRef.current.currentTime = Math.max(0, Math.min(time, durationSeconds));
+      audioRef.current.currentTime = nextTime;
     }
-    setCurrentTime(Math.max(0, Math.min(time, durationSeconds)));
+    setCurrentTime(nextTime);
   };
 
   const skip = (delta: number) => {
@@ -301,6 +311,14 @@ export function App() {
       <audio
         ref={audioRef}
         onEnded={() => setPlayingId(null)}
+        onLoadedMetadata={(event) => {
+          const duration = event.currentTarget.duration;
+          setAudioDuration(Number.isFinite(duration) ? duration : null);
+        }}
+        onDurationChange={(event) => {
+          const duration = event.currentTarget.duration;
+          setAudioDuration(Number.isFinite(duration) ? duration : null);
+        }}
         onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
       />
 

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
@@ -60,17 +60,33 @@ describe('App', () => {
     expect(screen.getAllByRole('button', { name: 'Pause' }).length).toBeGreaterThan(0);
   });
 
-  it('keeps the player visible after leaving an episode detail page', async () => {
+  it('uses audio metadata for transport controls without reopening episode detail', async () => {
     const user = userEvent.setup();
-    render(<App />);
+    const { container } = render(<App />);
 
     await screen.findByText('Lecture 14 - Regularization 2');
     await user.click(screen.getByText('Lecture 14 - Regularization 2'));
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Lecture 14 - Regularization 2' })).toBeInTheDocument());
+    const generate = screen.getAllByRole('button', { name: 'Generate' }).at(-1);
+    expect(generate).toBeDefined();
+    if (!generate) return;
+    await user.click(generate);
 
     await user.click(screen.getByRole('button', { name: 'Episodes' }));
 
     expect(screen.getByRole('heading', { name: 'Episodes' })).toBeInTheDocument();
-    expect(screen.getByLabelText('Now playing')).toHaveTextContent('Lecture 14 - Regularization 2');
+    const audio = container.querySelector('audio');
+    expect(audio).toBeTruthy();
+    if (!audio) return;
+
+    Object.defineProperty(audio, 'duration', { configurable: true, value: 124 });
+    fireEvent.durationChange(audio);
+    expect(screen.getByLabelText('Now playing')).toHaveTextContent('0:00 / 2:04');
+
+    fireEvent.change(screen.getByLabelText('Playback progress'), { target: { value: '30' } });
+    expect(audio.currentTime).toBe(30);
+
+    await user.click(screen.getByRole('button', { name: 'Pause' }));
+    expect(screen.getByRole('heading', { name: 'Episodes' })).toBeInTheDocument();
   });
 });
