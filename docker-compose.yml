@@ -29,7 +29,6 @@ services:
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_MODEL: ${LLM_MODEL:-}
       LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.7}
-      LEGACY_PODCAST_STORAGE_DIR: /data/legacy-podcasts
       PODCAST_AUDIO_DIR: /data/podcast-audio
       PODCAST_PUBLIC_API_BASE: http://localhost:8010
       PODCAST_CHUNK_SOURCE: local-demo
@@ -41,7 +40,6 @@ services:
     volumes:
       - podcast-audio:/data/podcast-audio
       - ./apps/api/demo-chunks:/app/apps/api/demo-chunks:ro
-      - ./apps/api/apps/api/.podcasts:/data/legacy-podcasts:ro
 
   web:
     build:

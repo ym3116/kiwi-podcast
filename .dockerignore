@@ -9,7 +9,6 @@ coverage
 .env.*
 !.env.example
 apps/api/.podcasts
-apps/api/apps
 apps/api/demo-chunks/*.json
 apps/api/demo-chunks/*.local.json
 npm-debug.log*

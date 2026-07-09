@@ -81,37 +81,24 @@ docker compose run --rm web npm run lint -w apps/web
 The first run may take longer because Docker builds the images and installs npm
 dependencies inside those images.
 
+Open Prisma Studio against the Docker PostgreSQL database:
+
+```bash
+docker compose run --rm -p 5555:5555 api npx prisma studio --schema apps/api/prisma/schema.prisma --hostname 0.0.0.0 --port 5555
+```
+
+Then open `http://localhost:5555`. Stop Prisma Studio with `Ctrl+C` in the
+terminal running that command.
+
 ## Regenerate A Demo Podcast
 
-Older local runs may have written generated podcast artifacts under the ignored
-folder `apps/api/apps/api/.podcasts`. Docker Compose mounts that folder
-read-only into the API container as `/data/legacy-podcasts`.
+The local generated podcast artifacts have been migrated into the Docker
+PostgreSQL and audio volumes. The old local generated folders are no longer
+needed by Docker.
 
-To import those legacy JSON/audio artifacts into PostgreSQL and the Docker audio
-volume, start the stack, then run:
-
-```bash
-docker compose run --rm api npm run podcasts:import-legacy -w apps/api
-```
-
-The import is idempotent. It upserts class, document, episode, generation job,
-script, and audio asset records into PostgreSQL, and copies MP3 files into the
-`kiwi-podcast_podcast-audio` Docker volume.
-
-After import, verify the known legacy episode:
-
-```bash
-curl -H "Authorization: Bearer local-dev-token" \
-  http://localhost:8010/api/podcast/classes/1ef1daa0-6f00-4c52-b13f-fa85b65b3e31/episodes/49d054f2-2a9c-44f1-9a9f-43d67d77a01a/status
-```
-
-Once imported and verified, `apps/api/apps`, `apps/api/dist`, and
-`apps/api/node_modules` are disposable local artifacts. They are ignored by git
-and are not needed by Docker.
-
-If you prefer a clean rebuild instead of importing, keep the local demo chunk
-file for document `49d054f2-2a9c-44f1-9a9f-43d67d77a01a`; it is mounted
-read-only into the API container as generation input.
+Keep the local demo chunk file for document
+`49d054f2-2a9c-44f1-9a9f-43d67d77a01a`; it is mounted read-only into the API
+container as generation input.
 
 After `docker compose up --build` is running, generate that podcast episode with
 the same API path the app uses:
