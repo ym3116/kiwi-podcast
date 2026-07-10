@@ -83,7 +83,7 @@ describe('App', () => {
     fireEvent.durationChange(audio);
     expect(screen.getByLabelText('Now playing')).toHaveTextContent('0:00 / 2:04');
 
-    fireEvent.change(screen.getByLabelText('Playback progress'), { target: { value: '30' } });
+    fireEvent.input(screen.getByLabelText('Playback progress'), { target: { value: '30' } });
     expect(audio.currentTime).toBe(30);
 
     await user.click(screen.getByRole('button', { name: 'Pause' }));

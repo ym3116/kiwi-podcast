@@ -13,6 +13,8 @@
     "build": "npm run build -w apps/api && npm run build -w apps/web",
     "test": "npm run test -w apps/api && npm run test -w apps/web",
     "lint": "npm run lint -w apps/api && npm run lint -w apps/web",
+    "db:up": "docker compose -f docker-compose.db.yml up -d",
+    "db:down": "docker compose -f docker-compose.db.yml down",
     "docker:up": "docker compose up --build",
     "docker:down": "docker compose down"
   },

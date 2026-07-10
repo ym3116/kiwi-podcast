@@ -259,16 +259,22 @@ export function App() {
   };
 
   const seek = (time: number) => {
-    const nextTime = Math.max(0, Math.min(time, durationSeconds));
-    if (audioRef.current && currentEpisode?.audioUrl) {
-      audioRef.current.currentTime = nextTime;
+    const audio = audioRef.current;
+    const seekDuration =
+      audio && currentEpisode?.audioUrl && Number.isFinite(audio.duration)
+        ? audio.duration
+        : durationSeconds;
+    const nextTime = Math.max(0, Math.min(time, seekDuration));
+    if (audio && currentEpisode?.audioUrl) {
+      audio.currentTime = nextTime;
     }
     setCurrentTime(nextTime);
   };
 
   const skip = (delta: number) => {
-    if (audioRef.current && currentEpisode?.audioUrl) {
-      seek(audioRef.current.currentTime + delta);
+    const audio = audioRef.current;
+    if (audio && currentEpisode?.audioUrl) {
+      seek(audio.currentTime + delta);
       return;
     }
     setCurrentTime((time) => Math.max(0, Math.min(time + delta, durationSeconds)));
@@ -320,6 +326,10 @@ export function App() {
           setAudioDuration(Number.isFinite(duration) ? duration : null);
         }}
         onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
+        onCanPlay={(event) => {
+          const duration = event.currentTarget.duration;
+          setAudioDuration(Number.isFinite(duration) ? duration : null);
+        }}
       />
 
       {loadState === 'loading' || loadState === 'idle' ? (

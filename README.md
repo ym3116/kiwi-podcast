@@ -2,28 +2,30 @@
 
 Kiwi Podcast is an external Kiwi App. Kiwi embeds the React app in an iframe,
 sends context through `window.postMessage`, and the app's Nest API stores
-generated podcast metadata in PostgreSQL with MP3 files in a Docker volume.
+generated podcast metadata in PostgreSQL.
 
-## Project Layout
+## Recommended Dev Setup
 
-- `apps/web`: React/Vite iframe frontend.
-- `apps/api`: NestJS API, Prisma schema, and podcast generation code.
-- `docker-compose.yml`: local Docker stack for web, API, and PostgreSQL.
-- `register.sh`: helper for Kiwi whitelist/register/class-enable.
-- `KIWI_APP_DEVELOPER_GUIDE.md`: Kiwi App protocol reference.
+For local development, run only PostgreSQL in Docker and run the web/API with
+npm. This gives faster reloads and avoids Docker networking surprises.
 
-## First-Time Setup
+### First-Time Setup
 
 1. Start Docker Desktop.
 
-2. Pull base images:
+2. Install npm dependencies:
 
 ```bash
-docker pull postgres:16-alpine
-docker pull node:20-bookworm-slim
+npm install
 ```
 
-3. Optional: create a root `.env` file for real podcast generation:
+3. Create `apps/api/.env`:
+
+```bash
+cp apps/api/.env.example apps/api/.env
+```
+
+4. Optional: add generation keys to `apps/api/.env`:
 
 ```text
 LLM_BASE_URL=https://your-openai-compatible-provider.example
@@ -32,39 +34,47 @@ LLM_MODEL=...
 TTS_API_KEY=...
 ```
 
-Without these keys, the app can run and inspect existing data, but new
-generation will fail and record a failed job.
-
-4. Build and start everything:
+5. Start PostgreSQL:
 
 ```bash
-docker compose up --build
+npm run db:up
 ```
 
-This starts:
+This exposes PostgreSQL on:
+
+```text
+localhost:5433
+```
+
+6. Generate Prisma client and apply migrations:
+
+```bash
+npm run db:generate -w apps/api
+npm run db:migrate -w apps/api
+```
+
+7. Start web and API locally:
+
+```bash
+npm run dev
+```
+
+Open:
 
 - Web: `http://localhost:8000`
 - API: `http://localhost:8010`
-- PostgreSQL: internal Docker service `postgres:5432`
 
-## Daily Run
-
-Start:
+### Daily Run
 
 ```bash
-docker compose up
+npm run db:up
+npm run dev
 ```
 
-Stop but keep DB/audio data:
+Stop PostgreSQL:
 
 ```bash
-docker compose down
-```
-
-Delete Docker DB/audio data and start fresh:
-
-```bash
-docker compose down -v
+npm run db:down
 ```
 
 Health check:
@@ -75,35 +85,36 @@ curl http://localhost:8010/health
 
 ## Prisma Studio
 
-Open Prisma Studio against the Docker PostgreSQL database:
+With PostgreSQL running:
 
 ```bash
-docker compose run --rm -p 5555:5555 api npx prisma studio --schema apps/api/prisma/schema.prisma --hostname 0.0.0.0 --port 5555
+npm run db:studio -w apps/api
 ```
 
-Then open:
+Then open the URL printed by Prisma, usually:
 
 ```text
 http://localhost:5555
 ```
 
-Stop Prisma Studio with `Ctrl+C`.
-
 ## Run Embedded In Kiwi
 
-1. Start this app:
+1. Start Kiwi frontend/backend.
 
-```bash
-docker compose up
-```
-
-2. In the Kiwi backend config, allow the app origins, then restart Kiwi:
+2. In the Kiwi backend config, allow the podcast app origins, then restart Kiwi:
 
 ```text
 FRONTEND_URL="http://localhost:3001,http://localhost:8000,http://localhost:8010"
 ```
 
-3. Register and enable the app:
+3. Start this app:
+
+```bash
+npm run db:up
+npm run dev
+```
+
+4. Register and enable the app:
 
 ```bash
 ADMIN_TOKEN='<admin-jwt>' \
@@ -113,7 +124,7 @@ APP_URL=http://localhost:8000 \
 ./register.sh
 ```
 
-Registration order is:
+Registration order:
 
 ```text
 admin whitelist -> public app register -> admin/instructor enable in class
@@ -130,7 +141,7 @@ curl -H "Authorization: Bearer local-dev-token" \
   http://localhost:8010/api/podcast/classes/1ef1daa0-6f00-4c52-b13f-fa85b65b3e31/episodes/49d054f2-2a9c-44f1-9a9f-43d67d77a01a/status
 ```
 
-Regenerate it from the mounted demo chunk source:
+Regenerate it from the local demo chunk source:
 
 ```bash
 curl -X POST \
@@ -138,24 +149,34 @@ curl -X POST \
   http://localhost:8010/api/podcast/classes/1ef1daa0-6f00-4c52-b13f-fa85b65b3e31/episodes/49d054f2-2a9c-44f1-9a9f-43d67d77a01a/generate
 ```
 
-## Checks
+## Optional Full Docker Stack
 
-Run checks inside Docker:
+You can still run web, API, and PostgreSQL all in Docker:
 
 ```bash
-docker compose run --rm api npm run build -w apps/api
-docker compose run --rm api npm run test -w apps/api
-docker compose run --rm api npm run lint -w apps/api
-docker compose run --rm web npm run build -w apps/web
-docker compose run --rm web npm run test -w apps/web
-docker compose run --rm web npm run lint -w apps/web
+npm run docker:up
+```
+
+Stop it:
+
+```bash
+npm run docker:down
+```
+
+Use this for container smoke tests, not normal frontend/backend development.
+
+## Checks
+
+```bash
+npm run build
+npm run test
+npm run lint
 ```
 
 ## Notes
 
 - Generated podcast metadata/scripts/jobs live in PostgreSQL.
-- MP3 files live in the Docker volume `kiwi-podcast_podcast-audio`.
-- PostgreSQL files live in the Docker volume `kiwi-podcast_postgres-data`.
-- Local Simulator mode still works when opening `http://localhost:8000` outside
-  Kiwi.
+- MP3 files live in `PODCAST_AUDIO_DIR`.
+- Standalone Simulator mode still works when opening `http://localhost:8000`
+  outside Kiwi.
 - Do not commit `.env`, JWTs, registration secrets, or API keys.

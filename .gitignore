@@ -5,6 +5,7 @@ coverage/
 .env.*
 !.env.example
 .DS_Store
+apps/api/.podcasts/
 apps/api/demo-chunks/*.json
 apps/api/demo-chunks/*.local.json
 !apps/api/demo-chunks/.gitkeep

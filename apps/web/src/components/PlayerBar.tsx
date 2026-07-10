@@ -1,5 +1,5 @@
 import { Pause, Play, RotateCcw, RotateCw } from 'lucide-react';
-import type { CSSProperties, MouseEvent, PointerEvent } from 'react';
+import type { ChangeEvent, CSSProperties, FormEvent, MouseEvent, PointerEvent } from 'react';
 import { PodcastEpisode } from '../types/podcast';
 
 interface PlayerBarProps {
@@ -37,6 +37,12 @@ export function PlayerBar({
     event: MouseEvent<HTMLElement> | PointerEvent<HTMLElement>,
   ) => {
     event.stopPropagation();
+  };
+  const handleSeek = (
+    event: ChangeEvent<HTMLInputElement> | FormEvent<HTMLInputElement>,
+  ) => {
+    event.stopPropagation();
+    onSeek(Number(event.currentTarget.value));
   };
 
   return (
@@ -105,10 +111,9 @@ export function PlayerBar({
             onClick={(event) => event.stopPropagation()}
             onMouseDown={stopControlEvent}
             onPointerDown={stopControlEvent}
-            onChange={(event) => {
-              event.stopPropagation();
-              onSeek(Number(event.target.value));
-            }}
+            onInput={handleSeek}
+            onChange={handleSeek}
+            step="0.1"
             style={{ '--progress': `${Math.round(progress * 100)}%` } as CSSProperties}
             type="range"
             value={Math.min(currentTime, duration || 1)}
