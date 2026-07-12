@@ -5,6 +5,7 @@ import { PodcastCover } from './PodcastCover';
 interface EpisodeDetailProps {
   podcast: PodcastSummary;
   episode: PodcastEpisode;
+  durationLabel: string;
   isPlaying: boolean;
   isGenerating: boolean;
   generationError: string | null;
@@ -15,6 +16,7 @@ interface EpisodeDetailProps {
 export function EpisodeDetail({
   podcast,
   episode,
+  durationLabel,
   isPlaying,
   isGenerating,
   generationError,
@@ -38,7 +40,7 @@ export function EpisodeDetail({
             <span>Lecture {episode.lectureNumber}</span>
             <span>
               <Clock size={16} />
-              {episode.durationLabel}
+              {durationLabel}
             </span>
           </div>
           <h1>{episode.title}</h1>

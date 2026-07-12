@@ -1,5 +1,7 @@
 import { Clock, FileText, ListMusic, Loader2, Play, RotateCw } from 'lucide-react';
+import { useState } from 'react';
 import { PodcastEpisode, PodcastResponse } from '../types/podcast';
+import { formatDuration } from '../utils/audioTime';
 import { PodcastCover } from './PodcastCover';
 
 interface PodcastOverviewProps {
@@ -23,6 +25,21 @@ export function PodcastOverview({
   onRefresh,
   generatingId,
 }: PodcastOverviewProps) {
+  const [audioDurationLabels, setAudioDurationLabels] = useState<Record<string, string>>({});
+
+  const rememberAudioDuration = (episodeId: string, duration: number) => {
+    if (!Number.isFinite(duration)) return;
+    setAudioDurationLabels((current) => {
+      const label = formatDuration(duration);
+      return current[episodeId] === label
+        ? current
+        : {
+            ...current,
+            [episodeId]: label,
+          };
+    });
+  };
+
   return (
     <main className="page-shell">
       <section className="podcast-hero" aria-label="Podcast">
@@ -68,6 +85,7 @@ export function PodcastOverview({
           <div className="episode-list">
             {data.episodes.map((episode) => {
               const isGenerating = generatingId === episode.id;
+              const durationLabel = audioDurationLabels[episode.id] ?? episode.durationLabel;
               return (
                 <article
                   className={episode.id === activeEpisodeId ? 'episode-row active' : 'episode-row'}
@@ -90,8 +108,21 @@ export function PodcastOverview({
                   <div className="episode-side">
                     <span className="duration">
                       <Clock size={15} />
-                      {episode.durationLabel}
+                      {durationLabel}
                     </span>
+                    {episode.status === 'ready' && episode.audioUrl ? (
+                      <audio
+                        aria-hidden="true"
+                        preload="metadata"
+                        src={episode.audioUrl}
+                        onDurationChange={(event) =>
+                          rememberAudioDuration(episode.id, event.currentTarget.duration)
+                        }
+                        onLoadedMetadata={(event) =>
+                          rememberAudioDuration(episode.id, event.currentTarget.duration)
+                        }
+                      />
+                    ) : null}
                     <button
                       className="round-play"
                       type="button"

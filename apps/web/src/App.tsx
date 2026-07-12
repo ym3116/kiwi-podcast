@@ -7,14 +7,10 @@ import { EpisodeDetail } from './components/EpisodeDetail';
 import { PlayerBar } from './components/PlayerBar';
 import { PodcastOverview } from './components/PodcastOverview';
 import { PodcastEpisode, PodcastResponse } from './types/podcast';
+import { durationLabelToSeconds, formatDuration } from './utils/audioTime';
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 const playbackRates = [1, 1.25, 1.5, 2];
-
-function durationToSeconds(durationLabel: string | undefined): number {
-  const minutes = Number(durationLabel?.match(/(\d+)/)?.[1] ?? 10);
-  return minutes * 60;
-}
 
 function withContextClassName(data: PodcastResponse, className?: string): PodcastResponse {
   const cleanClassName = className?.trim();
@@ -96,10 +92,18 @@ export function App() {
   }, [currentEpisodeId, podcastData]);
 
   const fallbackDurationSeconds = useMemo(
-    () => durationToSeconds(currentEpisode?.durationLabel),
+    () => durationLabelToSeconds(currentEpisode?.durationLabel),
     [currentEpisode],
   );
-  const durationSeconds = currentEpisode?.audioUrl && audioDuration ? audioDuration : fallbackDurationSeconds;
+  const durationSeconds =
+    currentEpisode?.audioUrl && audioDuration !== null ? audioDuration : fallbackDurationSeconds;
+  const selectedEpisodeDurationLabel =
+    selectedEpisode &&
+    selectedEpisode.id === currentEpisode?.id &&
+    selectedEpisode.audioUrl &&
+    audioDuration !== null
+      ? formatDuration(audioDuration)
+      : selectedEpisode?.durationLabel ?? '';
 
   useEffect(() => {
     if (previousEpisodeId.current !== currentEpisodeId) {
@@ -366,6 +370,7 @@ export function App() {
         <EpisodeDetail
           podcast={podcastData.podcast}
           episode={selectedEpisode}
+          durationLabel={selectedEpisodeDurationLabel}
           isPlaying={playingId === selectedEpisode.id}
           isGenerating={generatingId === selectedEpisode.id}
           generationError={generationError}

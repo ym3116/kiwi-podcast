@@ -75,6 +75,15 @@ describe('App', () => {
     await user.click(screen.getByRole('button', { name: 'Episodes' }));
 
     expect(screen.getByRole('heading', { name: 'Episodes' })).toBeInTheDocument();
+    const overviewAudio = container.querySelector('audio[preload="metadata"]');
+    expect(overviewAudio).toBeTruthy();
+    if (!overviewAudio) return;
+
+    Object.defineProperty(overviewAudio, 'duration', { configurable: true, value: 107 });
+    fireEvent.loadedMetadata(overviewAudio);
+    expect(screen.getByText('1:47')).toBeInTheDocument();
+    expect(screen.queryByText('15 min')).not.toBeInTheDocument();
+
     const audio = container.querySelector('audio');
     expect(audio).toBeTruthy();
     if (!audio) return;
@@ -88,5 +97,30 @@ describe('App', () => {
 
     await user.click(screen.getByRole('button', { name: 'Pause' }));
     expect(screen.getByRole('heading', { name: 'Episodes' })).toBeInTheDocument();
+  });
+
+  it('shows the real audio duration on the episode page after metadata loads', async () => {
+    const user = userEvent.setup();
+    const { container } = render(<App />);
+
+    await screen.findByText('Lecture 14 - Regularization 2');
+    await user.click(screen.getByText('Lecture 14 - Regularization 2'));
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Lecture 14 - Regularization 2' })).toBeInTheDocument(),
+    );
+    const generate = screen.getAllByRole('button', { name: 'Generate' }).at(-1);
+    expect(generate).toBeDefined();
+    if (!generate) return;
+    await user.click(generate);
+
+    const audio = container.querySelector('audio');
+    expect(audio).toBeTruthy();
+    if (!audio) return;
+
+    Object.defineProperty(audio, 'duration', { configurable: true, value: 107 });
+    fireEvent.loadedMetadata(audio);
+
+    expect(screen.getByText('1:47')).toBeInTheDocument();
+    expect(screen.queryByText('15 min')).not.toBeInTheDocument();
   });
 });
