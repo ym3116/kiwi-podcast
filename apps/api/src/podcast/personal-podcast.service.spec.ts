@@ -31,4 +31,61 @@ describe('PersonalPodcastService audio ownership', () => {
       status: 404,
     });
   });
+
+  it('deletes owned MinIO audio before deleting the database row', async () => {
+    const events: string[] = [];
+    const prisma = {
+      personalPodcast: {
+        findFirst: vi.fn(async () => record),
+        delete: vi.fn(async () => {
+          events.push('database');
+          return record;
+        }),
+      },
+    };
+    const audioStorage = {
+      delete: vi.fn(async () => {
+        events.push('storage');
+      }),
+    };
+    const subject = new PersonalPodcastService(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      audioStorage as never,
+    );
+
+    await expect(subject.delete('class-1', 'podcast-1', 'student-1')).resolves.toEqual({
+      deleted: true,
+      id: 'podcast-1',
+    });
+    expect(events).toEqual(['storage', 'database']);
+    expect(prisma.personalPodcast.findFirst).toHaveBeenCalledWith({
+      where: { id: 'podcast-1', classId: 'class-1', ownerUserId: 'student-1' },
+    });
+  });
+
+  it('does not delete a podcast while generation is active', async () => {
+    const prisma = {
+      personalPodcast: {
+        findFirst: vi.fn(async () => ({ ...record, status: 'generating_audio' })),
+        delete: vi.fn(),
+      },
+    };
+    const audioStorage = { delete: vi.fn() };
+    const subject = new PersonalPodcastService(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      audioStorage as never,
+    );
+
+    await expect(subject.delete('class-1', 'podcast-1', 'student-1')).rejects.toMatchObject({
+      status: 409,
+    });
+    expect(audioStorage.delete).not.toHaveBeenCalled();
+    expect(prisma.personalPodcast.delete).not.toHaveBeenCalled();
+  });
 });

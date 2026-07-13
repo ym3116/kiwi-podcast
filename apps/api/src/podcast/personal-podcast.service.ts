@@ -85,6 +85,21 @@ export class PersonalPodcastService {
     return this.toResponse(reset);
   }
 
+  async delete(classId: string, id: string, ownerUserId: string) {
+    const podcast = await this.owned(classId, id, ownerUserId);
+    if (!['ready', 'failed'].includes(podcast.status)) {
+      throw new HttpException(
+        { error: 'A podcast cannot be deleted while generation is running' },
+        HttpStatus.CONFLICT,
+      );
+    }
+    if (podcast.audioStorageKey) {
+      await this.audioStorage.delete(podcast.audioStorageKey);
+    }
+    await this.prisma.personalPodcast.delete({ where: { id: podcast.id } });
+    return { deleted: true, id: podcast.id };
+  }
+
   async audioStorageKey(id: string, ownerUserId: string): Promise<string> {
     const podcast = await this.prisma.personalPodcast.findUnique({ where: { id } });
     if (!podcast || podcast.status !== 'ready' || !podcast.audioStorageKey) {

@@ -75,6 +75,14 @@ export async function retryMyPodcast(classId: string, podcastId: string, userId:
   );
 }
 
+export async function deleteMyPodcast(classId: string, podcastId: string, userId: string, token: string) {
+  return apiJson<{ deleted: true; id: string }>(
+    `/api/podcast/classes/${encodeURIComponent(classId)}/my-podcasts/${encodeURIComponent(podcastId)}`,
+    token,
+    { method: 'DELETE', body: JSON.stringify({ ownerUserId: userId }) },
+  );
+}
+
 export async function generatePodcastEpisode(
   classId: string,
   documentId: string,

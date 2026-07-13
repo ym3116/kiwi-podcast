@@ -472,6 +472,27 @@ audio:focus-visible {
 .personal-card { display: grid; grid-template-columns: 120px minmax(0, 1fr); overflow: hidden; border: 1px solid var(--line); border-radius: 17px; background: var(--surface); box-shadow: 0 10px 28px rgba(31, 36, 46, .06); }
 .personal-art { min-height: 220px; display: grid; place-items: center; color: white; background: linear-gradient(145deg, #7a28db, #268fc4 70%, #55b683); }
 .personal-card-body { min-width: 0; padding: 20px; }
+.personal-card-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.delete-podcast-button {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #edcccc;
+  border-radius: 8px;
+  color: #b43b3b;
+  background: #fffafa;
+  cursor: pointer;
+}
+.delete-podcast-button:hover { color: #8f2222; border-color: #d99a9a; background: #fff0f0; }
+.delete-podcast-button:disabled { opacity: .55; cursor: wait; }
+.library-error { margin-top: 18px; padding: 12px 14px; border: 1px solid #efcaca; border-radius: 9px; color: #a83a3a; background: #fff3f3; }
+.delete-confirmation { margin-top: 14px; padding: 12px; border: 1px solid #edcccc; border-radius: 10px; background: #fff7f7; }
+.delete-confirmation p { display: block; margin: 0 0 10px; color: #762828; font-size: 12px; -webkit-line-clamp: unset; }
+.delete-confirmation > div { display: flex; justify-content: flex-end; gap: 8px; }
+.confirm-delete-button { min-height: 34px; display: inline-flex; align-items: center; gap: 6px; padding: 0 11px; border: 0; border-radius: 8px; color: #fff; background: #b43b3b; cursor: pointer; font-size: 12px; font-weight: 750; }
+.confirm-delete-button:hover { background: #912b2b; }
+.confirm-delete-button:disabled { opacity: .6; cursor: wait; }
 .personal-card h3 { margin: 8px 0 5px; }
 .personal-card p { display: -webkit-box; overflow: hidden; margin: 0 0 13px; color: var(--muted); font-size: 13px; line-height: 1.45; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .personal-card audio { width: 100%; height: 36px; margin-top: 12px; }

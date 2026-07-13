@@ -1,6 +1,7 @@
 import {
   Controller,
   Body,
+  Delete,
   Get,
   Headers,
   HttpException,
@@ -69,6 +70,17 @@ export class PodcastController {
   ) {
     this.requireBearerToken(authorization);
     return this.personalPodcasts.retry(classId, podcastId, ownerUserId);
+  }
+
+  @Delete('classes/:classId/my-podcasts/:podcastId')
+  async deletePersonalPodcast(
+    @Param('classId') classId: string,
+    @Param('podcastId') podcastId: string,
+    @Body('ownerUserId') ownerUserId: string,
+    @Headers('authorization') authorization?: string,
+  ) {
+    this.requireBearerToken(authorization);
+    return this.personalPodcasts.delete(classId, podcastId, ownerUserId);
   }
 
   @Get('my-podcasts/:podcastId/audio')

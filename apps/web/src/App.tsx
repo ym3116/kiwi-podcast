@@ -1,6 +1,6 @@
 import { AlertCircle, Headphones, Loader2, Radio } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { fetchClassPodcast, fetchMyPodcasts, generatePodcastEpisode, retryMyPodcast } from './api/podcastApi';
+import { deleteMyPodcast, fetchClassPodcast, fetchMyPodcasts, generatePodcastEpisode, retryMyPodcast } from './api/podcastApi';
 import { simulatorPodcast } from './bridge/simulator';
 import { useKiwiBridge } from './bridge/useKiwiBridge';
 import { EpisodeDetail } from './components/EpisodeDetail';
@@ -430,6 +430,16 @@ export function App() {
                 if (!bridge.context?.userId || !bridge.token?.accessToken) return;
                 await retryMyPodcast(bridge.context.classId, podcast.id, bridge.context.userId, bridge.token.accessToken);
                 await refreshMyPodcasts();
+              }}
+              onDelete={async (podcast) => {
+                if (!bridge.context?.userId || !bridge.token?.accessToken) return;
+                await deleteMyPodcast(
+                  bridge.context.classId,
+                  podcast.id,
+                  bridge.context.userId,
+                  bridge.token.accessToken,
+                );
+                setMyPodcasts((current) => current.filter((item) => item.id !== podcast.id));
               }}
             />
           )}

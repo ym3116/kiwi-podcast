@@ -9,7 +9,7 @@ async function bootstrap() {
   app.enableCors({
     origin: appOrigin.split(',').map((origin) => origin.trim()),
     allowedHeaders: ['Content-Type', 'Authorization'],
-    methods: ['GET', 'POST', 'OPTIONS'],
+    methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
   });
 
   const port = Number(process.env.PORT ?? 8010);
