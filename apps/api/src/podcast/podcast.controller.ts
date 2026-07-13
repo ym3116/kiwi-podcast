@@ -1,5 +1,6 @@
 import {
   Controller,
+  Body,
   Get,
   Headers,
   HttpException,
@@ -8,13 +9,74 @@ import {
   Param,
   Post,
   Res,
+  Query,
 } from '@nestjs/common';
 import { createReadStream } from 'node:fs';
 import { PodcastService } from './podcast.service';
+import { CreatePersonalPodcastInput, PersonalPodcastService } from './personal-podcast.service';
 
 @Controller('api/podcast')
 export class PodcastController {
-  constructor(@Inject(PodcastService) private readonly podcastService: PodcastService) {}
+  constructor(
+    @Inject(PodcastService) private readonly podcastService: PodcastService,
+    @Inject(PersonalPodcastService) private readonly personalPodcasts: PersonalPodcastService,
+  ) {}
+
+  @Get('classes/:classId/creator/materials')
+  async getCreatorMaterials(@Headers('authorization') authorization?: string) {
+    this.requireBearerToken(authorization);
+    return { materials: await this.personalPodcasts.listMaterials() };
+  }
+
+  @Post('classes/:classId/my-podcasts')
+  async createPersonalPodcast(
+    @Param('classId') classId: string,
+    @Body() input: CreatePersonalPodcastInput,
+    @Headers('authorization') authorization?: string,
+  ) {
+    this.requireBearerToken(authorization);
+    return this.personalPodcasts.create(classId, input);
+  }
+
+  @Get('classes/:classId/my-podcasts')
+  async listPersonalPodcasts(
+    @Param('classId') classId: string,
+    @Query('ownerUserId') ownerUserId: string,
+    @Headers('authorization') authorization?: string,
+  ) {
+    this.requireBearerToken(authorization);
+    return { podcasts: await this.personalPodcasts.list(classId, ownerUserId) };
+  }
+
+  @Get('classes/:classId/my-podcasts/:podcastId')
+  async getPersonalPodcast(
+    @Param('classId') classId: string,
+    @Param('podcastId') podcastId: string,
+    @Query('ownerUserId') ownerUserId: string,
+    @Headers('authorization') authorization?: string,
+  ) {
+    this.requireBearerToken(authorization);
+    return this.personalPodcasts.get(classId, podcastId, ownerUserId);
+  }
+
+  @Post('classes/:classId/my-podcasts/:podcastId/retry')
+  async retryPersonalPodcast(
+    @Param('classId') classId: string,
+    @Param('podcastId') podcastId: string,
+    @Body('ownerUserId') ownerUserId: string,
+    @Headers('authorization') authorization?: string,
+  ) {
+    this.requireBearerToken(authorization);
+    return this.personalPodcasts.retry(classId, podcastId, ownerUserId);
+  }
+
+  @Get('my-podcasts/:podcastId/audio')
+  async getPersonalAudio(@Param('podcastId') podcastId: string, @Res() response: any) {
+    const audioPath = await this.personalPodcasts.audioPath(podcastId);
+    response.setHeader('Content-Type', 'audio/mpeg');
+    response.setHeader('Cache-Control', 'private, max-age=300');
+    createReadStream(audioPath).on('error', () => response.status(404).end()).pipe(response);
+  }
 
   @Get('classes/:classId')
   async getClassPodcast(

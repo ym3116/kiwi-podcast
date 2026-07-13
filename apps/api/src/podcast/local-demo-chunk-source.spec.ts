@@ -55,4 +55,29 @@ describe('LocalDemoChunkSource', () => {
       'does not contain any text chunks',
     );
   });
+
+  it('discovers materials and combines selected chunks in selection order', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'kiwi-podcast-chunks-'));
+    process.env.PODCAST_DEMO_CHUNKS_DIR = dir;
+    await Promise.all(
+      [
+        { documentId: 'doc-1', documentName: 'First lecture', chunks: [{ text: 'Alpha', pageNumber: 1 }] },
+        { documentId: 'doc-2', documentName: 'Second lecture', chunks: [{ text: 'Beta', pageNumber: 2 }] },
+      ].map((payload) => writeFile(path.join(dir, `${payload.documentId}.json`), JSON.stringify(payload))),
+    );
+
+    const source = new LocalDemoChunkSource();
+    const catalog = await source.listDemoMaterials();
+    const combined = await source.getCombinedChunks('class-1', ['doc-2', 'doc-1']);
+
+    expect(catalog.map((material) => material.id)).toEqual(['doc-1', 'doc-2']);
+    expect(combined.chunks.map((chunk) => [chunk.documentId, chunk.text])).toEqual([
+      ['doc-2', 'Beta'],
+      ['doc-1', 'Alpha'],
+    ]);
+    expect(combined.sourceMetadata).toEqual([
+      expect.objectContaining({ documentId: 'doc-2', includedChunks: 1 }),
+      expect.objectContaining({ documentId: 'doc-1', includedChunks: 1 }),
+    ]);
+  });
 });

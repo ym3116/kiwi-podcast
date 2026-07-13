@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import {
   GeneratedPodcastScript,
+  PersonalPodcastScriptInput,
   PodcastChunkInput,
   PodcastTurn,
 } from './podcast-generation.types';
@@ -34,7 +35,38 @@ export class ScriptGeneratorService {
     ].join('\n');
   }
 
+  buildPersonalPrompt(input: PersonalPodcastScriptInput): string {
+    const chunkText = input.chunks
+      .map((chunk, index) => {
+        const source = chunk.documentName ?? input.documentName;
+        const page = chunk.pageNumber ? `, page ${chunk.pageNumber}` : '';
+        return `Source ${index + 1} (${source}${page}):\n${chunk.text}`;
+      })
+      .join('\n\n');
+    const wordTargets = { 5: '650-800', 10: '1300-1600', 15: '1950-2400' } as const;
+    return [
+      'Create a grounded educational podcast responding to the student request below.',
+      'Use two hosts named HOST_A and HOST_B. Use only facts supported by the supplied source chunks.',
+      `Difficulty: ${input.difficulty}.`,
+      `Target duration: ${input.durationMinutes} minutes (${wordTargets[input.durationMinutes]} words).`,
+      'Return only valid JSON with this shape:',
+      '{"title":"string","summary":"string","durationTargetMinutes":number,"turns":[{"speaker":"HOST_A","text":"string"},{"speaker":"HOST_B","text":"string"}]}',
+      '',
+      `Student request: ${input.prompt}`,
+      '',
+      chunkText,
+    ].join('\n');
+  }
+
   async generate(input: PodcastChunkInput): Promise<GeneratedPodcastScript> {
+    return this.generateFromPrompt(this.buildPrompt(input));
+  }
+
+  async generatePersonal(input: PersonalPodcastScriptInput): Promise<GeneratedPodcastScript> {
+    return this.generateFromPrompt(this.buildPersonalPrompt(input));
+  }
+
+  private async generateFromPrompt(prompt: string): Promise<GeneratedPodcastScript> {
     if (!this.baseUrl || !this.apiKey || !this.model) {
       throw new Error('LLM_BASE_URL, LLM_API_KEY, and LLM_MODEL must be configured');
     }
@@ -54,7 +86,7 @@ export class ScriptGeneratorService {
             content:
               'You write clear, audio-friendly educational podcast scripts and return strict JSON only.',
           },
-          { role: 'user', content: this.buildPrompt(input) },
+          { role: 'user', content: prompt },
         ],
       }),
     });

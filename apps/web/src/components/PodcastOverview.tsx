@@ -13,6 +13,7 @@ interface PodcastOverviewProps {
   onPlayEpisode: (episode: PodcastEpisode) => void | Promise<void>;
   onRefresh: () => void;
   generatingId: string | null;
+  onCreate: () => void;
 }
 
 export function PodcastOverview({
@@ -24,6 +25,7 @@ export function PodcastOverview({
   onPlayEpisode,
   onRefresh,
   generatingId,
+  onCreate,
 }: PodcastOverviewProps) {
   const [audioDurationLabels, setAudioDurationLabels] = useState<Record<string, string>>({});
 
@@ -41,7 +43,7 @@ export function PodcastOverview({
   };
 
   return (
-    <main className="page-shell">
+    <div>
       <section className="podcast-hero" aria-label="Podcast">
         <PodcastCover title={data.podcast.title} />
         <div className="podcast-copy">
@@ -59,6 +61,9 @@ export function PodcastOverview({
             </span>
           </div>
           <div className="hero-actions">
+            <button className="primary-button create-button" type="button" onClick={onCreate}>
+              Create your podcast
+            </button>
             <button className="primary-button" type="button" onClick={onPlayAll}>
               <Play size={18} fill="currentColor" />
               Play All
@@ -146,6 +151,6 @@ export function PodcastOverview({
           </div>
         )}
       </section>
-    </main>
+    </div>
   );
 }

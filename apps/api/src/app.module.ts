@@ -9,6 +9,7 @@ import { PodcastGenerationService } from './podcast/podcast-generation.service';
 import { PodcastService } from './podcast/podcast.service';
 import { ScriptGeneratorService } from './podcast/script-generator.service';
 import { TtsService } from './podcast/tts.service';
+import { PersonalPodcastService } from './podcast/personal-podcast.service';
 
 @Module({
   imports: [DatabaseModule],
@@ -21,6 +22,7 @@ import { TtsService } from './podcast/tts.service';
     PodcastService,
     ScriptGeneratorService,
     TtsService,
+    PersonalPodcastService,
   ],
 })
 export class AppModule {}

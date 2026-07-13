@@ -134,6 +134,32 @@ Then open the class in Kiwi and use the `Podcast` tab.
 
 ## Demo Podcast API
 
+### Guided personal podcasts
+
+The `My Podcasts` tab provides a guided creator for a prompt, one to five local
+materials, a 5/10/15-minute target, and beginner/intermediate/advanced
+difficulty. Generation runs as a staged background job and the UI polls its
+persisted progress through script generation, TTS, and saving.
+
+Creator materials are discovered from `apps/api/demo-chunks/*.json`. Each file
+must contain `documentId`, `documentName`, and a non-empty `chunks` array. Adding
+another exported Kiwi chunk JSON file automatically makes it selectable; the
+creator does not read live Kiwi embeddings or material contents yet.
+
+After pulling this version, apply the personal-podcast migration:
+
+```bash
+npm run db:generate -w apps/api
+npm run db:migrate -w apps/api
+```
+
+List the local creator catalog:
+
+```bash
+curl -H "Authorization: Bearer local-dev-token" \
+  http://localhost:8010/api/podcast/classes/demo-class/creator/materials
+```
+
 Check the migrated demo episode:
 
 ```bash

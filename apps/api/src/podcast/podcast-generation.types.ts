@@ -5,6 +5,16 @@ export type PodcastJobStatus = PodcastEpisode['status'];
 export interface PodcastChunk {
   text: string;
   pageNumber?: string;
+  documentId?: string;
+  documentName?: string;
+}
+
+export type PodcastDifficulty = 'beginner' | 'intermediate' | 'advanced';
+
+export interface PersonalPodcastScriptInput extends PodcastChunkInput {
+  prompt: string;
+  durationMinutes: 5 | 10 | 15;
+  difficulty: PodcastDifficulty;
 }
 
 export interface PodcastChunkInput {

@@ -1,15 +1,19 @@
 import { AlertCircle, Headphones, Loader2, Radio } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { fetchClassPodcast, generatePodcastEpisode } from './api/podcastApi';
+import { fetchClassPodcast, fetchMyPodcasts, generatePodcastEpisode, retryMyPodcast } from './api/podcastApi';
 import { simulatorPodcast } from './bridge/simulator';
 import { useKiwiBridge } from './bridge/useKiwiBridge';
 import { EpisodeDetail } from './components/EpisodeDetail';
 import { PlayerBar } from './components/PlayerBar';
 import { PodcastOverview } from './components/PodcastOverview';
-import { PodcastEpisode, PodcastResponse } from './types/podcast';
+import { MyPodcasts } from './components/MyPodcasts';
+import { PodcastCreator } from './components/PodcastCreator';
+import { PersonalPodcast, PodcastEpisode, PodcastResponse } from './types/podcast';
 import { durationLabelToSeconds, formatDuration } from './utils/audioTime';
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error';
+type MainView = 'home' | 'creator';
+type PodcastTab = 'class' | 'mine';
 const playbackRates = [1, 1.25, 1.5, 2];
 
 function withContextClassName(data: PodcastResponse, className?: string): PodcastResponse {
@@ -39,6 +43,10 @@ export function App() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [generatingId, setGeneratingId] = useState<string | null>(null);
   const [generationError, setGenerationError] = useState<string | null>(null);
+  const [mainView, setMainView] = useState<MainView>('home');
+  const [podcastTab, setPodcastTab] = useState<PodcastTab>('class');
+  const [myPodcasts, setMyPodcasts] = useState<PersonalPodcast[]>([]);
+  const [myPodcastsLoading, setMyPodcastsLoading] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const previousEpisodeId = useRef<string | null>(null);
 
@@ -71,6 +79,33 @@ export function App() {
 
     void loadPodcast();
   }, [bridge.context, bridge.mode, bridge.token, refreshKey]);
+
+  const refreshMyPodcasts = async () => {
+    if (!bridge.context?.userId || !bridge.token?.accessToken) return;
+    setMyPodcastsLoading(true);
+    try {
+      const result = await fetchMyPodcasts(
+        bridge.context.classId,
+        bridge.context.userId,
+        bridge.token.accessToken,
+      );
+      setMyPodcasts(result.podcasts);
+    } catch (error) {
+      setGenerationError(error instanceof Error ? error.message : 'Unable to load personal podcasts.');
+    } finally {
+      setMyPodcastsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (podcastTab === 'mine' && mainView === 'home') void refreshMyPodcasts();
+  }, [podcastTab, mainView, bridge.context?.classId, bridge.context?.userId, bridge.token?.accessToken]);
+
+  useEffect(() => {
+    if (!myPodcasts.some((podcast) => !['ready', 'failed'].includes(podcast.status))) return;
+    const timer = window.setInterval(() => void refreshMyPodcasts(), 2500);
+    return () => window.clearInterval(timer);
+  }, [myPodcasts]);
 
   useEffect(() => {
     if (!podcastData || !bridge.updateContext) return;
@@ -304,7 +339,7 @@ export function App() {
         </div>
       </header>
 
-      {currentEpisode ? (
+      {mainView === 'home' && currentEpisode ? (
         <PlayerBar
           currentTime={currentTime}
           duration={durationSeconds}
@@ -336,14 +371,29 @@ export function App() {
         }}
       />
 
-      {loadState === 'loading' || loadState === 'idle' ? (
+      {mainView === 'creator' && bridge.context?.userId && bridge.token?.accessToken ? (
+        <PodcastCreator
+          classId={bridge.context.classId}
+          userId={bridge.context.userId}
+          token={bridge.token.accessToken}
+          onCancel={() => setMainView('home')}
+          onComplete={() => {
+            setMainView('home');
+            setPodcastTab('mine');
+            void refreshMyPodcasts();
+          }}
+          onContextChange={bridge.updateContext}
+        />
+      ) : null}
+
+      {mainView === 'home' && (loadState === 'loading' || loadState === 'idle') ? (
         <div className="center-state">
           <Loader2 className="spin" size={30} />
           <p>Loading podcast episodes</p>
         </div>
       ) : null}
 
-      {loadState === 'error' ? (
+      {mainView === 'home' && loadState === 'error' ? (
         <div className="center-state error">
           <AlertCircle size={32} />
           <p>{loadError}</p>
@@ -353,20 +403,40 @@ export function App() {
         </div>
       ) : null}
 
-      {podcastData && loadState === 'ready' && !selectedEpisode ? (
-        <PodcastOverview
-          data={podcastData}
-          activeEpisodeId={selectedEpisodeId}
-          playingId={playingId}
-          onSelectEpisode={selectEpisode}
-          onPlayAll={playAll}
-          onPlayEpisode={playEpisode}
-          onRefresh={() => setRefreshKey((key) => key + 1)}
-          generatingId={generatingId}
-        />
+      {mainView === 'home' && podcastData && loadState === 'ready' && !selectedEpisode ? (
+        <main className="page-shell">
+          <div className="podcast-tabs" role="tablist" aria-label="Podcast library">
+            <button role="tab" aria-selected={podcastTab === 'class'} className={podcastTab === 'class' ? 'active' : ''} type="button" onClick={() => setPodcastTab('class')}>Class Podcast</button>
+            <button role="tab" aria-selected={podcastTab === 'mine'} className={podcastTab === 'mine' ? 'active' : ''} type="button" onClick={() => setPodcastTab('mine')}>My Podcasts</button>
+          </div>
+          {podcastTab === 'class' ? (
+            <PodcastOverview
+              data={podcastData}
+              activeEpisodeId={selectedEpisodeId}
+              playingId={playingId}
+              onSelectEpisode={selectEpisode}
+              onPlayAll={playAll}
+              onPlayEpisode={playEpisode}
+              onRefresh={() => setRefreshKey((key) => key + 1)}
+              generatingId={generatingId}
+              onCreate={() => setMainView('creator')}
+            />
+          ) : (
+            <MyPodcasts
+              podcasts={myPodcasts}
+              loading={myPodcastsLoading}
+              onCreate={() => setMainView('creator')}
+              onRetry={async (podcast) => {
+                if (!bridge.context?.userId || !bridge.token?.accessToken) return;
+                await retryMyPodcast(bridge.context.classId, podcast.id, bridge.context.userId, bridge.token.accessToken);
+                await refreshMyPodcasts();
+              }}
+            />
+          )}
+        </main>
       ) : null}
 
-      {podcastData && selectedEpisode ? (
+      {mainView === 'home' && podcastData && selectedEpisode ? (
         <EpisodeDetail
           podcast={podcastData.podcast}
           episode={selectedEpisode}
