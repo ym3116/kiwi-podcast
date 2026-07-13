@@ -112,8 +112,8 @@ function inMemoryStore() {
       return { scriptPath: `/scripts/${episodeId}.json` };
     }),
     readScript: vi.fn(async (episodeId: string) => scripts.get(episodeId) ?? null),
-    writeAudio: vi.fn(async (episodeId: string) => ({ audioPath: `/audio/${episodeId}.mp3` })),
-    audioPath: vi.fn((episodeId: string) => `/audio/${episodeId}.mp3`),
+    writeAudio: vi.fn(async (episodeId: string) => ({ storageKey: `class-episodes/${episodeId}.mp3` })),
+    audioStorageKey: vi.fn(async (episodeId: string) => `class-episodes/${episodeId}.mp3`),
   };
   return store;
 }

@@ -11,15 +11,16 @@ import {
   Res,
   Query,
 } from '@nestjs/common';
-import { createReadStream } from 'node:fs';
 import { PodcastService } from './podcast.service';
 import { CreatePersonalPodcastInput, PersonalPodcastService } from './personal-podcast.service';
+import { AudioStorageService } from '../storage/audio-storage.service';
 
 @Controller('api/podcast')
 export class PodcastController {
   constructor(
     @Inject(PodcastService) private readonly podcastService: PodcastService,
     @Inject(PersonalPodcastService) private readonly personalPodcasts: PersonalPodcastService,
+    @Inject(AudioStorageService) private readonly audioStorage: AudioStorageService,
   ) {}
 
   @Get('classes/:classId/creator/materials')
@@ -71,11 +72,17 @@ export class PodcastController {
   }
 
   @Get('my-podcasts/:podcastId/audio')
-  async getPersonalAudio(@Param('podcastId') podcastId: string, @Res() response: any) {
-    const audioPath = await this.personalPodcasts.audioPath(podcastId);
-    response.setHeader('Content-Type', 'audio/mpeg');
+  async getPersonalAudio(
+    @Param('podcastId') podcastId: string,
+    @Query('ownerUserId') ownerUserId: string,
+    @Res() response: any,
+  ) {
+    const storageKey = await this.personalPodcasts.audioStorageKey(podcastId, ownerUserId);
+    const audio = await this.audioStorage.stream(storageKey);
+    response.setHeader('Content-Type', audio.metadata.contentType);
+    if (audio.metadata.contentLength) response.setHeader('Content-Length', audio.metadata.contentLength);
     response.setHeader('Cache-Control', 'private, max-age=300');
-    createReadStream(audioPath).on('error', () => response.status(404).end()).pipe(response);
+    audio.body.on('error', () => response.end()).pipe(response);
   }
 
   @Get('classes/:classId')
@@ -126,19 +133,17 @@ export class PodcastController {
   }
 
   @Get('audio/:episodeId')
-  getAudio(@Param('episodeId') episodeId: string, @Res() response: any) {
-    const audioPath = this.podcastService.getAudioPath(episodeId);
-    response.setHeader('Content-Type', 'audio/mpeg');
+  async getAudio(@Param('episodeId') episodeId: string, @Res() response: any) {
+    const storageKey = await this.podcastService.getAudioStorageKey(episodeId);
+    if (!storageKey) {
+      response.status(404).json({ error: 'Podcast audio not found' });
+      return;
+    }
+    const audio = await this.audioStorage.stream(storageKey);
+    response.setHeader('Content-Type', audio.metadata.contentType);
+    if (audio.metadata.contentLength) response.setHeader('Content-Length', audio.metadata.contentLength);
     response.setHeader('Cache-Control', 'private, max-age=300');
-    createReadStream(audioPath)
-      .on('error', () => {
-        if (!response.headersSent) {
-          response.status(404).json({ error: 'Podcast audio not found' });
-        } else {
-          response.end();
-        }
-      })
-      .pipe(response);
+    audio.body.on('error', () => response.end()).pipe(response);
   }
 
   private extractBearerToken(authorization?: string): string | null {

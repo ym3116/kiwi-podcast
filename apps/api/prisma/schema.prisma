@@ -120,7 +120,6 @@ model PodcastAudioAsset {
   episodeId  String          @map("episode_id")
   jobId      String          @unique @map("job_id") @db.Uuid
   storageKey String          @map("storage_key")
-  filePath   String          @map("file_path")
   mimeType   String          @map("mime_type")
   byteSize   Int             @map("byte_size")
   checksum   String
@@ -147,8 +146,7 @@ model PersonalPodcast {
   selectedMaterials Json                  @map("selected_materials")
   sourceMetadata    Json?                 @map("source_metadata")
   turns             Json?
-  audioPath         String?               @map("audio_path")
-  audioUrl          String?               @map("audio_url")
+  audioStorageKey   String?               @map("audio_storage_key")
   errorMessage      String?               @map("error_message")
   startedAt         DateTime?             @map("started_at")
   completedAt       DateTime?             @map("completed_at")

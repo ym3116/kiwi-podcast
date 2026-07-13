@@ -42,7 +42,7 @@ export interface PodcastJob {
   documentId: string;
   status: PodcastJobStatus;
   scriptPath?: string;
-  audioPath?: string;
+  audioStorageKey?: string;
   audioUrl?: string;
   generatedAt?: string;
   updatedAt: string;

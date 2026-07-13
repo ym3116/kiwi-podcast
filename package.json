@@ -13,10 +13,10 @@
     "build": "npm run build -w apps/api && npm run build -w apps/web",
     "test": "npm run test -w apps/api && npm run test -w apps/web",
     "lint": "npm run lint -w apps/api && npm run lint -w apps/web",
-    "db:up": "docker compose -f docker-compose.db.yml up -d",
-    "db:down": "docker compose -f docker-compose.db.yml down",
-    "docker:up": "docker compose up --build",
-    "docker:down": "docker compose down"
+    "infra:up": "docker compose up -d",
+    "infra:down": "docker compose down",
+    "infra:logs": "docker compose logs -f postgres minio",
+    "clean": "node scripts/clean-build.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"

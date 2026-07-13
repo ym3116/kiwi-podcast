@@ -1,8 +1,7 @@
 import { HttpException, HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { PersonalPodcast, PersonalPodcastStatus, Prisma } from '@prisma/client';
-import { mkdir, writeFile } from 'node:fs/promises';
-import path from 'node:path';
 import { PrismaService } from '../database/prisma.service';
+import { AudioStorageService } from '../storage/audio-storage.service';
 import { LocalDemoChunkSource } from './local-demo-chunk-source';
 import { PodcastDifficulty } from './podcast-generation.types';
 import { ScriptGeneratorService } from './script-generator.service';
@@ -18,8 +17,6 @@ export interface CreatePersonalPodcastInput {
 
 @Injectable()
 export class PersonalPodcastService {
-  private readonly audioRoot =
-    process.env.PODCAST_AUDIO_DIR ?? path.resolve(__dirname, '../../.podcasts/audio');
   private readonly publicBase = (process.env.PODCAST_PUBLIC_API_BASE ?? 'http://localhost:8010').replace(
     /\/$/,
     '',
@@ -30,6 +27,7 @@ export class PersonalPodcastService {
     @Inject(LocalDemoChunkSource) private readonly source: LocalDemoChunkSource,
     @Inject(ScriptGeneratorService) private readonly scripts: ScriptGeneratorService,
     @Inject(TtsService) private readonly tts: TtsService,
+    @Inject(AudioStorageService) private readonly audioStorage: AudioStorageService,
   ) {}
 
   listMaterials() {
@@ -87,15 +85,15 @@ export class PersonalPodcastService {
     return this.toResponse(reset);
   }
 
-  async audioPath(id: string, ownerUserId?: string): Promise<string> {
+  async audioStorageKey(id: string, ownerUserId: string): Promise<string> {
     const podcast = await this.prisma.personalPodcast.findUnique({ where: { id } });
-    if (!podcast || podcast.status !== 'ready' || !podcast.audioPath) {
+    if (!podcast || podcast.status !== 'ready' || !podcast.audioStorageKey) {
       throw new HttpException({ error: 'Podcast audio not found' }, HttpStatus.NOT_FOUND);
     }
-    if (ownerUserId && podcast.ownerUserId !== ownerUserId) {
+    if (!ownerUserId || podcast.ownerUserId !== ownerUserId) {
       throw new HttpException({ error: 'Podcast not found' }, HttpStatus.NOT_FOUND);
     }
-    return podcast.audioPath;
+    return podcast.audioStorageKey;
   }
 
   private async validateInput(input: CreatePersonalPodcastInput) {
@@ -143,15 +141,17 @@ export class PersonalPodcastService {
       });
       const audio = await this.tts.synthesize(script);
       await this.stage(id, 'saving', 95, 'Saving your podcast');
-      await mkdir(this.audioRoot, { recursive: true });
-      const audioPath = path.join(this.audioRoot, `personal-${id}.mp3`);
-      await writeFile(audioPath, audio);
-      const audioUrl = `${this.publicBase}/api/podcast/my-podcasts/${id}/audio`;
-      await this.stage(id, 'ready', 100, 'Your podcast is ready', {
-        audioPath,
-        audioUrl,
-        completedAt: new Date(),
-      });
+      const storageKey = `personal/${this.safeKeyPart(podcast.ownerUserId)}/${id}.mp3`;
+      await this.audioStorage.upload(storageKey, audio);
+      try {
+        await this.stage(id, 'ready', 100, 'Your podcast is ready', {
+          audioStorageKey: storageKey,
+          completedAt: new Date(),
+        });
+      } catch (error) {
+        await this.audioStorage.delete(storageKey).catch(() => undefined);
+        throw error;
+      }
     } catch (error) {
       await this.prisma.personalPodcast.update({
         where: { id },
@@ -201,7 +201,10 @@ export class PersonalPodcastService {
       statusMessage: podcast.statusMessage,
       selectedMaterials: podcast.selectedMaterials,
       turns: podcast.turns,
-      audioUrl: podcast.audioUrl,
+      audioUrl:
+        podcast.status === 'ready' && podcast.audioStorageKey
+          ? `${this.publicBase}/api/podcast/my-podcasts/${podcast.id}/audio?ownerUserId=${encodeURIComponent(podcast.ownerUserId)}`
+          : undefined,
       errorMessage: podcast.errorMessage,
       startedAt: podcast.startedAt?.toISOString(),
       completedAt: podcast.completedAt?.toISOString(),
@@ -212,5 +215,9 @@ export class PersonalPodcastService {
 
   private badRequest(message: string): never {
     throw new HttpException({ error: message }, HttpStatus.BAD_REQUEST);
+  }
+
+  private safeKeyPart(value: string): string {
+    return encodeURIComponent(value).replace(/%/g, '_');
   }
 }

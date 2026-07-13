@@ -1,9 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { Prisma, PodcastJobStatus as PrismaPodcastJobStatus } from '@prisma/client';
 import { createHash } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
-import path from 'node:path';
 import { PrismaService } from '../database/prisma.service';
+import { AudioStorageService } from '../storage/audio-storage.service';
 import { PodcastResponse } from '../types/podcast';
 import {
   GeneratedPodcastScript,
@@ -13,11 +12,10 @@ import {
 
 @Injectable()
 export class PodcastArtifactStore {
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
-
-  private readonly root =
-    process.env.PODCAST_STORAGE_DIR ?? path.resolve(__dirname, '../../.podcasts');
-  private readonly audioRoot = process.env.PODCAST_AUDIO_DIR ?? path.join(this.root, 'audio');
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(AudioStorageService) private readonly audioStorage: AudioStorageService,
+  ) {}
 
   async readJob(episodeId: string): Promise<PodcastJob | null> {
     const job = await this.prisma.generationJob.findFirst({
@@ -171,29 +169,32 @@ export class PodcastArtifactStore {
     };
   }
 
-  async writeAudio(episodeId: string, audio: Buffer): Promise<{ audioPath: string }> {
-    const audioPath = this.audioPath(episodeId);
-    await mkdir(path.dirname(audioPath), { recursive: true });
-    await writeFile(audioPath, audio);
+  async writeAudio(episodeId: string, audio: Buffer): Promise<{ storageKey: string }> {
+    const storageKey = `class-episodes/${this.safeId(episodeId)}.mp3`;
     const job = await this.activeJob(episodeId);
-    await this.prisma.podcastAudioAsset.upsert({
-      where: { jobId: job.id },
-      create: {
-        episodeId,
-        jobId: job.id,
-        storageKey: `${this.safeId(episodeId)}.mp3`,
-        filePath: audioPath,
-        mimeType: 'audio/mpeg',
-        byteSize: audio.byteLength,
-        checksum: createHash('sha256').update(audio).digest('hex'),
-      },
-      update: {
-        filePath: audioPath,
-        byteSize: audio.byteLength,
-        checksum: createHash('sha256').update(audio).digest('hex'),
-      },
-    });
-    return { audioPath };
+    await this.audioStorage.upload(storageKey, audio);
+    try {
+      await this.prisma.podcastAudioAsset.upsert({
+        where: { jobId: job.id },
+        create: {
+          episodeId,
+          jobId: job.id,
+          storageKey,
+          mimeType: 'audio/mpeg',
+          byteSize: audio.byteLength,
+          checksum: createHash('sha256').update(audio).digest('hex'),
+        },
+        update: {
+          storageKey,
+          byteSize: audio.byteLength,
+          checksum: createHash('sha256').update(audio).digest('hex'),
+        },
+      });
+      return { storageKey };
+    } catch (error) {
+      await this.audioStorage.delete(storageKey).catch(() => undefined);
+      throw error;
+    }
   }
 
   async syncCatalog(response: PodcastResponse): Promise<void> {
@@ -258,8 +259,13 @@ export class PodcastArtifactStore {
     });
   }
 
-  audioPath(episodeId: string): string {
-    return path.join(this.audioRoot, `${this.safeId(episodeId)}.mp3`);
+  async audioStorageKey(episodeId: string): Promise<string | null> {
+    const asset = await this.prisma.podcastAudioAsset.findFirst({
+      where: { episodeId },
+      orderBy: { createdAt: 'desc' },
+      select: { storageKey: true },
+    });
+    return asset?.storageKey ?? null;
   }
 
   private async activeJob(episodeId: string) {
@@ -316,7 +322,7 @@ export class PodcastArtifactStore {
       errorMessage: string | null;
       updatedAt: Date;
       finishedAt: Date | null;
-      audioAsset?: { filePath: string } | null;
+      audioAsset?: { storageKey: string } | null;
     },
   ): PodcastJob {
     return {
@@ -324,7 +330,7 @@ export class PodcastArtifactStore {
       classId: job.classId,
       documentId: job.kiwiDocumentId,
       status: job.status,
-      audioPath: job.audioAsset?.filePath,
+      audioStorageKey: job.audioAsset?.storageKey,
       audioUrl: job.status === 'ready' ? this.audioUrl(job.episodeId) : undefined,
       generatedAt: job.status === 'ready' ? job.finishedAt?.toISOString() : undefined,
       updatedAt: job.updatedAt.toISOString(),

@@ -6,8 +6,10 @@ generated podcast metadata in PostgreSQL.
 
 ## Recommended Dev Setup
 
-For local development, run only PostgreSQL in Docker and run the web/API with
-npm. This gives faster reloads and avoids Docker networking surprises.
+For local development, run PostgreSQL and private MinIO object storage in Docker,
+then run the web/API locally with npm. PostgreSQL stores structured podcast data;
+MinIO stores generated MP3 objects. The app services have one supported local
+runtime and keep fast reloads and local `node_modules`.
 
 ### First-Time Setup
 
@@ -34,16 +36,18 @@ LLM_MODEL=...
 TTS_API_KEY=...
 ```
 
-5. Start PostgreSQL:
+5. Start infrastructure:
 
 ```bash
-npm run db:up
+npm run infra:up
 ```
 
-This exposes PostgreSQL on:
+This exposes:
 
 ```text
-localhost:5433
+PostgreSQL: localhost:5433
+MinIO API:  localhost:9010
+MinIO UI:   http://localhost:9011
 ```
 
 6. Generate Prisma client and apply migrations:
@@ -67,14 +71,14 @@ Open:
 ### Daily Run
 
 ```bash
-npm run db:up
+npm run infra:up
 npm run dev
 ```
 
-Stop PostgreSQL:
+Stop infrastructure without deleting data:
 
 ```bash
-npm run db:down
+npm run infra:down
 ```
 
 Health check:
@@ -82,6 +86,9 @@ Health check:
 ```bash
 curl http://localhost:8010/health
 ```
+
+The health response includes MinIO bucket availability. `docker compose down -v`
+is destructive: it deletes both PostgreSQL rows and all generated MP3 objects.
 
 ## Prisma Studio
 
@@ -110,7 +117,7 @@ FRONTEND_URL="http://localhost:3001,http://localhost:8000,http://localhost:8010"
 3. Start this app:
 
 ```bash
-npm run db:up
+npm run infra:up
 npm run dev
 ```
 
@@ -175,21 +182,17 @@ curl -X POST \
   http://localhost:8010/api/podcast/classes/1ef1daa0-6f00-4c52-b13f-fa85b65b3e31/episodes/49d054f2-2a9c-44f1-9a9f-43d67d77a01a/generate
 ```
 
-## Optional Full Docker Stack
+## Runtime Architecture
 
-You can still run web, API, and PostgreSQL all in Docker:
+The React/Vite frontend and Nest API run only through `npm run dev`. Docker
+Compose contains infrastructure only: PostgreSQL and MinIO. When Nest starts,
+its storage service idempotently creates the private `kiwi-podcasts` bucket.
+Audio is streamed through Nest; the browser never receives MinIO credentials.
 
-```bash
-npm run docker:up
-```
-
-Stop it:
-
-```bash
-npm run docker:down
-```
-
-Use this for container smoke tests, not normal frontend/backend development.
+Creator source fixtures remain local and ignored at
+`apps/api/demo-chunks/*.json`. Place approved Kiwi chunk exports there before
+starting the creator. The API reports an empty catalog if no valid fixtures are
+present.
 
 ## Checks
 
@@ -197,12 +200,15 @@ Use this for container smoke tests, not normal frontend/backend development.
 npm run build
 npm run test
 npm run lint
+npm run clean
 ```
 
 ## Notes
 
-- Generated podcast metadata/scripts/jobs live in PostgreSQL.
-- MP3 files live in `PODCAST_AUDIO_DIR`.
+- Generated podcast metadata, scripts, and jobs live in PostgreSQL.
+- MP3 objects live in the private MinIO `kiwi-podcasts` bucket and persist in
+  the Docker `minio-data` volume.
+- `apps/api/dist` and `apps/web/dist` are ignored, disposable build output.
 - Standalone Simulator mode still works when opening `http://localhost:8000`
   outside Kiwi.
 - Do not commit `.env`, JWTs, registration secrets, or API keys.

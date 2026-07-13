@@ -44,8 +44,8 @@ export class PodcastService {
     return this.generationService.getStatus(classId, documentId);
   }
 
-  getAudioPath(episodeId: string): string {
-    return this.generationService.getAudioPath(episodeId);
+  getAudioStorageKey(episodeId: string): Promise<string | null> {
+    return this.generationService.getAudioStorageKey(episodeId);
   }
 
   private shouldFallback(message: string): boolean {

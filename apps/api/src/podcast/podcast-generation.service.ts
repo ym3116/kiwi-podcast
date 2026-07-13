@@ -35,7 +35,7 @@ export class PodcastGenerationService {
       const script = await this.scripts.generate(chunks);
       const { scriptPath } = await this.artifacts.writeScript(episodeId, script);
       const audio = await this.tts.synthesize(script);
-      const { audioPath } = await this.artifacts.writeAudio(episodeId, audio);
+      const { storageKey } = await this.artifacts.writeAudio(episodeId, audio);
       const generatedAt = new Date().toISOString();
 
       const job = await this.artifacts.markJob(episodeId, {
@@ -43,7 +43,7 @@ export class PodcastGenerationService {
         documentId,
         status: 'ready',
         scriptPath,
-        audioPath,
+        audioStorageKey: storageKey,
         audioUrl: this.audioUrl(episodeId),
         generatedAt,
       });
@@ -105,8 +105,8 @@ export class PodcastGenerationService {
     };
   }
 
-  getAudioPath(episodeId: string): string {
-    return this.artifacts.audioPath(episodeId);
+  getAudioStorageKey(episodeId: string): Promise<string | null> {
+    return this.artifacts.audioStorageKey(episodeId);
   }
 
   private async episodeFromJob(job: PodcastJob): Promise<PodcastEpisode | undefined> {

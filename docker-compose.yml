@@ -5,6 +5,8 @@ services:
       POSTGRES_DB: kiwi_podcast
       POSTGRES_USER: kiwi_podcast
       POSTGRES_PASSWORD: kiwi_podcast
+    ports:
+      - "5433:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -13,45 +15,23 @@ services:
       timeout: 5s
       retries: 10
 
-  api:
-    build:
-      context: .
-      dockerfile: apps/api/Dockerfile
-    depends_on:
-      postgres:
-        condition: service_healthy
+  minio:
+    image: minio/minio:RELEASE.2024-12-18T13-15-44Z
+    command: server /data --console-address ":9001"
     environment:
-      PORT: 8010
-      APP_ORIGIN: http://localhost:8000
-      KIWI_API_BASE: http://host.docker.internal:3000
-      DATABASE_URL: postgresql://kiwi_podcast:kiwi_podcast@postgres:5432/kiwi_podcast
-      LLM_BASE_URL: ${LLM_BASE_URL:-}
-      LLM_API_KEY: ${LLM_API_KEY:-}
-      LLM_MODEL: ${LLM_MODEL:-}
-      LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.7}
-      PODCAST_AUDIO_DIR: /data/podcast-audio
-      PODCAST_PUBLIC_API_BASE: http://localhost:8010
-      PODCAST_CHUNK_SOURCE: local-demo
-      TTS_BASE_URL: https://litellm.tunnel.kiwiai.org
-      TTS_API_KEY: ${TTS_API_KEY:-}
-      TTS_MODEL: higgs-audio-v2
+      MINIO_ROOT_USER: kiwi_podcast
+      MINIO_ROOT_PASSWORD: kiwi_podcast_dev_secret
     ports:
-      - "8010:8010"
+      - "9010:9000"
+      - "9011:9001"
     volumes:
-      - podcast-audio:/data/podcast-audio
-      - ./apps/api/demo-chunks:/app/apps/api/demo-chunks:ro
-
-  web:
-    build:
-      context: .
-      dockerfile: apps/web/Dockerfile
-    depends_on:
-      - api
-    environment:
-      VITE_PODCAST_API_BASE: http://localhost:8010
-    ports:
-      - "8000:8000"
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
 volumes:
   postgres-data:
-  podcast-audio:
+  minio-data:
