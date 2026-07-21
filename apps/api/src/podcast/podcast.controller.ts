@@ -87,14 +87,11 @@ export class PodcastController {
   async getPersonalAudio(
     @Param('podcastId') podcastId: string,
     @Query('ownerUserId') ownerUserId: string,
+    @Headers('range') range: string | undefined,
     @Res() response: any,
   ) {
     const storageKey = await this.personalPodcasts.audioStorageKey(podcastId, ownerUserId);
-    const audio = await this.audioStorage.stream(storageKey);
-    response.setHeader('Content-Type', audio.metadata.contentType);
-    if (audio.metadata.contentLength) response.setHeader('Content-Length', audio.metadata.contentLength);
-    response.setHeader('Cache-Control', 'private, max-age=300');
-    audio.body.on('error', () => response.end()).pipe(response);
+    await this.streamAudio(storageKey, range, response);
   }
 
   @Get('classes/:classId')
@@ -145,17 +142,38 @@ export class PodcastController {
   }
 
   @Get('audio/:episodeId')
-  async getAudio(@Param('episodeId') episodeId: string, @Res() response: any) {
+  async getAudio(
+    @Param('episodeId') episodeId: string,
+    @Headers('range') range: string | undefined,
+    @Res() response: any,
+  ) {
     const storageKey = await this.podcastService.getAudioStorageKey(episodeId);
     if (!storageKey) {
       response.status(404).json({ error: 'Podcast audio not found' });
       return;
     }
-    const audio = await this.audioStorage.stream(storageKey);
+    await this.streamAudio(storageKey, range, response);
+  }
+
+  private async streamAudio(storageKey: string, requestedRange: string | undefined, response: any) {
+    const range = this.normalizeRange(requestedRange);
+    if (requestedRange && !range) {
+      response.status(HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE).end();
+      return;
+    }
+    const audio = await this.audioStorage.stream(storageKey, range);
     response.setHeader('Content-Type', audio.metadata.contentType);
     if (audio.metadata.contentLength) response.setHeader('Content-Length', audio.metadata.contentLength);
+    if (audio.metadata.contentRange) response.setHeader('Content-Range', audio.metadata.contentRange);
+    response.setHeader('Accept-Ranges', 'bytes');
     response.setHeader('Cache-Control', 'private, max-age=300');
+    if (range && audio.metadata.contentRange) response.status(HttpStatus.PARTIAL_CONTENT);
     audio.body.on('error', () => response.end()).pipe(response);
+  }
+
+  private normalizeRange(range?: string): string | undefined {
+    const normalized = range?.trim();
+    return normalized && /^bytes=(?:\d+-\d*|-\d+)$/.test(normalized) ? normalized : undefined;
   }
 
   private extractBearerToken(authorization?: string): string | null {

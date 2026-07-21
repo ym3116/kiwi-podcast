@@ -3,30 +3,25 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { deleteMyPodcast, fetchClassPodcast, fetchMyPodcasts, generatePodcastEpisode, retryMyPodcast } from './api/podcastApi';
 import { simulatorPodcast } from './bridge/simulator';
 import { useKiwiBridge } from './bridge/useKiwiBridge';
-import { EpisodeDetail } from './components/EpisodeDetail';
-import { PlayerBar } from './components/PlayerBar';
-import { PodcastOverview } from './components/PodcastOverview';
 import { MyPodcasts } from './components/MyPodcasts';
+import { PlayerBar } from './components/PlayerBar';
 import { PodcastCreator } from './components/PodcastCreator';
+import { PodcastDetail } from './components/PodcastDetail';
+import { PodcastOverview } from './components/PodcastOverview';
 import { PersonalPodcast, PodcastEpisode, PodcastResponse } from './types/podcast';
+import { classEpisodeView, personalPodcastView, PodcastSource, PodcastViewItem, podcastViewKey } from './types/podcastView';
 import { durationLabelToSeconds, formatDuration } from './utils/audioTime';
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 type MainView = 'home' | 'creator';
 type PodcastTab = 'class' | 'mine';
+type DetailTarget = { source: PodcastSource; id: string };
 const playbackRates = [1, 1.25, 1.5, 2];
 
 function withContextClassName(data: PodcastResponse, className?: string): PodcastResponse {
   const cleanClassName = className?.trim();
   if (!cleanClassName || data.podcast.title !== 'Class - Podcast') return data;
-
-  return {
-    ...data,
-    podcast: {
-      ...data.podcast,
-      title: `${cleanClassName} - Podcast`,
-    },
-  };
+  return { ...data, podcast: { ...data.podcast, title: `${cleanClassName} - Podcast` } };
 }
 
 export function App() {
@@ -34,9 +29,9 @@ export function App() {
   const [podcastData, setPodcastData] = useState<PodcastResponse | null>(null);
   const [loadState, setLoadState] = useState<LoadState>('idle');
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [selectedEpisodeId, setSelectedEpisodeId] = useState<string | null>(null);
-  const [currentEpisodeId, setCurrentEpisodeId] = useState<string | null>(null);
-  const [playingId, setPlayingId] = useState<string | null>(null);
+  const [selectedDetail, setSelectedDetail] = useState<DetailTarget | null>(null);
+  const [currentTrack, setCurrentTrack] = useState<PodcastViewItem | null>(null);
+  const [playingKey, setPlayingKey] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [audioDuration, setAudioDuration] = useState<number | null>(null);
   const [playbackRate, setPlaybackRate] = useState(1);
@@ -48,23 +43,21 @@ export function App() {
   const [myPodcasts, setMyPodcasts] = useState<PersonalPodcast[]>([]);
   const [myPodcastsLoading, setMyPodcastsLoading] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const previousEpisodeId = useRef<string | null>(null);
+  const currentTimeRef = useRef(0);
+  const pendingSeekRef = useRef<number | null>(null);
 
   useEffect(() => {
     async function loadPodcast() {
       if (!bridge.context) return;
-
       if (bridge.mode === 'simulator') {
         setPodcastData(simulatorPodcast);
         setLoadState('ready');
         return;
       }
-
       if (!bridge.token?.accessToken) {
         setLoadState('loading');
         return;
       }
-
       setLoadState('loading');
       setLoadError(null);
       try {
@@ -76,7 +69,6 @@ export function App() {
         setLoadState('error');
       }
     }
-
     void loadPodcast();
   }, [bridge.context, bridge.mode, bridge.token, refreshKey]);
 
@@ -84,11 +76,7 @@ export function App() {
     if (!bridge.context?.userId || !bridge.token?.accessToken) return;
     setMyPodcastsLoading(true);
     try {
-      const result = await fetchMyPodcasts(
-        bridge.context.classId,
-        bridge.context.userId,
-        bridge.token.accessToken,
-      );
+      const result = await fetchMyPodcasts(bridge.context.classId, bridge.context.userId, bridge.token.accessToken);
       setMyPodcasts(result.podcasts);
     } catch (error) {
       setGenerationError(error instanceof Error ? error.message : 'Unable to load personal podcasts.');
@@ -109,266 +97,244 @@ export function App() {
 
   useEffect(() => {
     if (!podcastData || !bridge.updateContext) return;
-    const episodeText = podcastData.episodes
-      .slice(0, 5)
-      .map((episode) => episode.title)
-      .join('; ');
+    const episodeText = podcastData.episodes.slice(0, 5).map((episode) => episode.title).join('; ');
     bridge.updateContext(`Kiwi Podcast loaded ${podcastData.podcast.title}. Episodes: ${episodeText}`);
   }, [bridge.updateContext, podcastData]);
 
-  const selectedEpisode = useMemo(() => {
-    if (!podcastData || !selectedEpisodeId) return null;
-    return podcastData.episodes.find((episode) => episode.id === selectedEpisodeId) ?? null;
-  }, [podcastData, selectedEpisodeId]);
-
-  const currentEpisode = useMemo(() => {
-    if (!podcastData || !currentEpisodeId) return null;
-    return podcastData.episodes.find((episode) => episode.id === currentEpisodeId) ?? null;
-  }, [currentEpisodeId, podcastData]);
-
-  const fallbackDurationSeconds = useMemo(
-    () => durationLabelToSeconds(currentEpisode?.durationLabel),
-    [currentEpisode],
-  );
-  const durationSeconds =
-    currentEpisode?.audioUrl && audioDuration !== null ? audioDuration : fallbackDurationSeconds;
-  const selectedEpisodeDurationLabel =
-    selectedEpisode &&
-    selectedEpisode.id === currentEpisode?.id &&
-    selectedEpisode.audioUrl &&
-    audioDuration !== null
-      ? formatDuration(audioDuration)
-      : selectedEpisode?.durationLabel ?? '';
-
-  useEffect(() => {
-    if (previousEpisodeId.current !== currentEpisodeId) {
-      previousEpisodeId.current = currentEpisodeId;
-      setCurrentTime(0);
-      setAudioDuration(null);
+  const selectedItem = useMemo(() => {
+    if (!selectedDetail) return null;
+    if (selectedDetail.source === 'class') {
+      const episode = podcastData?.episodes.find((item) => item.id === selectedDetail.id);
+      return episode && podcastData ? classEpisodeView(podcastData.podcast, episode) : null;
     }
-  }, [currentEpisodeId]);
+    const podcast = myPodcasts.find((item) => item.id === selectedDetail.id);
+    return podcast ? personalPodcastView(podcast) : null;
+  }, [myPodcasts, podcastData, selectedDetail]);
 
   useEffect(() => {
-    if (!playingId || !currentEpisode || currentEpisode.audioUrl) return;
+    setCurrentTrack((current) => {
+      if (!current) return null;
+      if (current.source === 'class') {
+        const episode = podcastData?.episodes.find((item) => item.id === current.id);
+        return episode && podcastData ? classEpisodeView(podcastData.podcast, episode) : current;
+      }
+      const podcast = myPodcasts.find((item) => item.id === current.id);
+      return podcast ? personalPodcastView(podcast) : current;
+    });
+  }, [myPodcasts, podcastData]);
 
-    const timer = window.setInterval(() => {
-      setCurrentTime((time) => {
-        const nextTime = time + playbackRate;
-        if (nextTime >= durationSeconds) {
-          window.clearInterval(timer);
-          setPlayingId(null);
-          return durationSeconds;
-        }
-        return nextTime;
-      });
-    }, 1000);
-
-    return () => window.clearInterval(timer);
-  }, [currentEpisode, durationSeconds, playbackRate, playingId]);
+  const currentKey = currentTrack ? podcastViewKey(currentTrack) : null;
+  const fallbackDurationSeconds = useMemo(() => durationLabelToSeconds(currentTrack?.durationLabel), [currentTrack?.durationLabel]);
+  const durationSeconds = currentTrack?.audioUrl && audioDuration !== null ? audioDuration : fallbackDurationSeconds;
+  const detailItem = useMemo(() => {
+    if (!selectedItem || selectedItem.id !== currentTrack?.id || selectedItem.source !== currentTrack.source || audioDuration === null) return selectedItem;
+    return { ...selectedItem, durationLabel: formatDuration(audioDuration) };
+  }, [audioDuration, currentTrack, selectedItem]);
 
   useEffect(() => {
     const audio = audioRef.current;
-    if (!audio || !currentEpisode?.audioUrl) return;
-
+    if (!audio || !currentTrack?.audioUrl || !currentKey) return;
     audio.pause();
-    audio.src = currentEpisode.audioUrl;
+    audio.src = currentTrack.audioUrl;
     audio.currentTime = 0;
     audio.playbackRate = playbackRate;
+    currentTimeRef.current = 0;
+    pendingSeekRef.current = null;
     setCurrentTime(0);
-    setAudioDuration(Number.isFinite(audio.duration) ? audio.duration : null);
-
-    if (playingId === currentEpisode.id) {
-      void audio.play().catch((error) => {
-        setGenerationError(error instanceof Error ? error.message : 'Unable to play generated audio.');
-        setPlayingId(null);
-      });
-    }
-  }, [currentEpisode?.audioUrl, currentEpisode?.id]);
+    setAudioDuration(null);
+  }, [currentKey, currentTrack?.audioUrl]);
 
   useEffect(() => {
     const audio = audioRef.current;
-    if (!audio || !currentEpisode?.audioUrl) return;
+    if (!audio || !currentTrack?.audioUrl || !currentKey) return;
     audio.playbackRate = playbackRate;
-  }, [currentEpisode?.audioUrl, playbackRate]);
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio || !currentEpisode?.audioUrl) return;
-
-    if (playingId === currentEpisode.id) {
+    if (playingKey === currentKey) {
       void audio.play().catch((error) => {
-        setGenerationError(error instanceof Error ? error.message : 'Unable to play generated audio.');
-        setPlayingId(null);
+        setGenerationError(error instanceof Error ? error.message : 'Unable to play podcast audio.');
+        setPlayingKey(null);
       });
     } else {
       audio.pause();
     }
-  }, [currentEpisode, playingId]);
+  }, [currentKey, currentTrack?.audioUrl, playbackRate, playingKey]);
 
   const updateEpisode = (episode: PodcastEpisode) => {
-    setPodcastData((current) => {
-      if (!current) return current;
-      return {
-        ...current,
-        episodes: current.episodes.map((item) =>
-          item.id === episode.id
-            ? {
-                ...item,
-                ...episode,
-              }
-            : item,
-        ),
-      };
-    });
+    setPodcastData((current) => current ? {
+      ...current,
+      episodes: current.episodes.map((item) => item.id === episode.id ? { ...item, ...episode } : item),
+    } : current);
   };
 
   const ensureGeneratedEpisode = async (episode: PodcastEpisode): Promise<PodcastEpisode> => {
     if (episode.status === 'ready' && episode.audioUrl) return episode;
-    if (!bridge.context || !bridge.token?.accessToken) {
-      throw new Error('Podcast generation needs Kiwi context and an app token.');
-    }
-
+    if (!bridge.context || !bridge.token?.accessToken) throw new Error('Podcast generation needs Kiwi context and an app token.');
     setGeneratingId(episode.id);
     setGenerationError(null);
     try {
-      const result = await generatePodcastEpisode(
-        bridge.context.classId,
-        episode.documentId,
-        bridge.token.accessToken,
-      );
-      const nextEpisode =
-        result.episode ??
-        ({
-          ...episode,
-          status: result.job.status,
-          audioUrl: result.job.audioUrl,
-          generatedAt: result.job.generatedAt,
-          errorMessage: result.job.errorMessage,
-        } satisfies PodcastEpisode);
+      const result = await generatePodcastEpisode(bridge.context.classId, episode.documentId, bridge.token.accessToken);
+      const nextEpisode = result.episode ?? ({
+        ...episode,
+        status: result.job.status,
+        audioUrl: result.job.audioUrl,
+        generatedAt: result.job.generatedAt,
+        errorMessage: result.job.errorMessage,
+      } satisfies PodcastEpisode);
       updateEpisode(nextEpisode);
-      if (nextEpisode.status !== 'ready' || !nextEpisode.audioUrl) {
-        throw new Error(nextEpisode.errorMessage || 'Podcast generation did not produce audio yet.');
-      }
+      if (nextEpisode.status !== 'ready' || !nextEpisode.audioUrl) throw new Error(nextEpisode.errorMessage || 'Podcast generation did not produce audio yet.');
       return nextEpisode;
     } finally {
       setGeneratingId(null);
     }
   };
 
-  const selectEpisode = (episode: PodcastEpisode) => {
-    setSelectedEpisodeId(episode.id);
-    setCurrentEpisodeId(episode.id);
-    window.history.replaceState(null, '', `#${episode.id}`);
+  const openDetail = (target: DetailTarget) => {
+    setMainView('home');
+    setPodcastTab(target.source === 'class' ? 'class' : 'mine');
+    setSelectedDetail(target);
+    setGenerationError(null);
+    window.history.replaceState(null, '', `#${target.source}-${target.id}`);
   };
 
-  const playEpisode = async (
-    episode: PodcastEpisode,
-    options: { openDetail?: boolean } = { openDetail: true },
-  ) => {
-    if (options.openDetail) {
-      setSelectedEpisodeId(episode.id);
-    }
-    setCurrentEpisodeId(episode.id);
-    if (playingId === episode.id) {
-      setPlayingId(null);
+  const closeDetail = () => {
+    setSelectedDetail(null);
+    setGenerationError(null);
+    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+  };
+
+  const playClassEpisode = async (episode: PodcastEpisode) => {
+    if (!podcastData) return;
+    const initialItem = classEpisodeView(podcastData.podcast, episode);
+    const key = podcastViewKey(initialItem);
+    if (currentKey === key && currentTrack?.audioUrl) {
+      setPlayingKey((current) => current === key ? null : key);
       return;
     }
-
     try {
       const generated = await ensureGeneratedEpisode(episode);
-      setCurrentEpisodeId(generated.id);
-      setPlayingId(generated.id);
+      const item = classEpisodeView(podcastData.podcast, generated);
+      setCurrentTrack(item);
+      setPlayingKey(podcastViewKey(item));
     } catch (error) {
       setGenerationError(error instanceof Error ? error.message : 'Unable to generate podcast audio.');
-      setPlayingId(null);
+      setPlayingKey(null);
     }
   };
 
-  const playAll = () => {
-    const firstEpisode = podcastData?.episodes[0];
-    if (!firstEpisode) return;
-    setSelectedEpisodeId(firstEpisode.id);
-    setCurrentEpisodeId(firstEpisode.id);
-    void playEpisode(firstEpisode);
+  const playPersonalPodcast = (podcast: PersonalPodcast) => {
+    const item = personalPodcastView(podcast);
+    if (podcast.status !== 'ready' || !podcast.audioUrl) return;
+    const key = podcastViewKey(item);
+    if (currentKey === key) {
+      setPlayingKey((current) => current === key ? null : key);
+      return;
+    }
+    setGenerationError(null);
+    setCurrentTrack(item);
+    setPlayingKey(key);
   };
 
-  const toggleCurrentEpisode = () => {
-    if (!currentEpisode) return;
-    void playEpisode(currentEpisode, { openDetail: false });
+  const toggleCurrentTrack = () => {
+    if (!currentKey) return;
+    setPlayingKey((current) => current === currentKey ? null : currentKey);
   };
 
   const seek = (time: number) => {
     const audio = audioRef.current;
-    const seekDuration =
-      audio && currentEpisode?.audioUrl && Number.isFinite(audio.duration)
-        ? audio.duration
-        : durationSeconds;
+    const hasAudioDuration = Boolean(audio && Number.isFinite(audio.duration) && audio.duration > 0);
+    const seekDuration = hasAudioDuration ? audio!.duration : durationSeconds;
     const nextTime = Math.max(0, Math.min(time, seekDuration));
-    if (audio && currentEpisode?.audioUrl) {
-      audio.currentTime = nextTime;
-    }
+    currentTimeRef.current = nextTime;
     setCurrentTime(nextTime);
+    if (!audio || !currentTrack?.audioUrl) return;
+    if (!hasAudioDuration) {
+      pendingSeekRef.current = nextTime;
+      return;
+    }
+    pendingSeekRef.current = null;
+    const seekableAudio = audio as HTMLAudioElement & { fastSeek?: (time: number) => void };
+    if (seekableAudio.fastSeek) seekableAudio.fastSeek(nextTime);
+    else audio.currentTime = nextTime;
   };
 
   const skip = (delta: number) => {
-    const audio = audioRef.current;
-    if (audio && currentEpisode?.audioUrl) {
-      seek(audio.currentTime + delta);
-      return;
-    }
-    setCurrentTime((time) => Math.max(0, Math.min(time + delta, durationSeconds)));
+    seek((pendingSeekRef.current ?? currentTimeRef.current) + delta);
   };
 
-  const cycleSpeed = () => {
-    setPlaybackRate((rate) => {
-      const currentIndex = playbackRates.indexOf(rate);
-      return playbackRates[(currentIndex + 1) % playbackRates.length];
-    });
+  const handleAudioMetadata = (audio: HTMLAudioElement) => {
+    const duration = audio.duration;
+    setAudioDuration(Number.isFinite(duration) && duration > 0 ? duration : null);
+    if (pendingSeekRef.current === null || !Number.isFinite(duration) || duration <= 0) return;
+    const nextTime = Math.max(0, Math.min(pendingSeekRef.current, duration));
+    pendingSeekRef.current = null;
+    currentTimeRef.current = nextTime;
+    audio.currentTime = nextTime;
+    setCurrentTime(nextTime);
+  };
+
+  const cycleSpeed = () => setPlaybackRate((rate) => playbackRates[(playbackRates.indexOf(rate) + 1) % playbackRates.length]);
+
+  const switchTab = (tab: PodcastTab) => {
+    setPodcastTab(tab);
+    setSelectedDetail(null);
+    setGenerationError(null);
+  };
+
+  const retryPersonal = async (podcast: PersonalPodcast) => {
+    if (!bridge.context?.userId || !bridge.token?.accessToken) return;
+    await retryMyPodcast(bridge.context.classId, podcast.id, bridge.context.userId, bridge.token.accessToken);
+    await refreshMyPodcasts();
+  };
+
+  const deletePersonal = async (podcast: PersonalPodcast) => {
+    if (!bridge.context?.userId || !bridge.token?.accessToken) return;
+    await deleteMyPodcast(bridge.context.classId, podcast.id, bridge.context.userId, bridge.token.accessToken);
+    const deletedKey = podcastViewKey(personalPodcastView(podcast));
+    if (currentKey === deletedKey) {
+      audioRef.current?.pause();
+      setCurrentTrack(null);
+      setPlayingKey(null);
+      setCurrentTime(0);
+      setAudioDuration(null);
+    }
+    if (selectedDetail?.source === 'personal' && selectedDetail.id === podcast.id) setSelectedDetail(null);
+    setMyPodcasts((current) => current.filter((item) => item.id !== podcast.id));
   };
 
   return (
-    <div className="app">
+    <div className={currentTrack ? 'app has-player' : 'app'}>
       <header className="topbar">
-        <div className="brand">
-          <Headphones size={26} />
-          <span>Kiwi Podcast</span>
-        </div>
+        <div className="brand"><Headphones size={26} /><span>Kiwi Podcast</span></div>
         <div className="runtime-status" aria-label="Runtime status">
           <span className={bridge.mode === 'simulator' ? 'status-dot sim' : 'status-dot live'} />
           {bridge.mode === 'simulator' ? 'Simulator' : bridge.connected ? 'Live' : 'Connecting'}
         </div>
       </header>
 
-      {mainView === 'home' && currentEpisode ? (
+      {currentTrack ? (
         <PlayerBar
+          item={currentTrack}
           currentTime={currentTime}
           duration={durationSeconds}
-          episode={currentEpisode}
-          isPlaying={playingId === currentEpisode.id}
+          isPlaying={playingKey === currentKey}
+          onOpen={() => openDetail({ source: currentTrack.source, id: currentTrack.id })}
           onCycleSpeed={cycleSpeed}
           onSeek={seek}
           onSkip={skip}
-          onTogglePlay={toggleCurrentEpisode}
+          onTogglePlay={toggleCurrentTrack}
           playbackRate={playbackRate}
         />
       ) : null}
 
       <audio
         ref={audioRef}
-        onEnded={() => setPlayingId(null)}
-        onLoadedMetadata={(event) => {
-          const duration = event.currentTarget.duration;
-          setAudioDuration(Number.isFinite(duration) ? duration : null);
+        onEnded={() => setPlayingKey(null)}
+        onLoadedMetadata={(event) => handleAudioMetadata(event.currentTarget)}
+        onDurationChange={(event) => handleAudioMetadata(event.currentTarget)}
+        onTimeUpdate={(event) => {
+          currentTimeRef.current = event.currentTarget.currentTime;
+          setCurrentTime(event.currentTarget.currentTime);
         }}
-        onDurationChange={(event) => {
-          const duration = event.currentTarget.duration;
-          setAudioDuration(Number.isFinite(duration) ? duration : null);
-        }}
-        onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
-        onCanPlay={(event) => {
-          const duration = event.currentTarget.duration;
-          setAudioDuration(Number.isFinite(duration) ? duration : null);
-        }}
+        onCanPlay={(event) => handleAudioMetadata(event.currentTarget)}
       />
 
       {mainView === 'creator' && bridge.context?.userId && bridge.token?.accessToken ? (
@@ -382,41 +348,32 @@ export function App() {
             setPodcastTab('mine');
             void refreshMyPodcasts();
           }}
+          onPlayReady={playPersonalPodcast}
           onContextChange={bridge.updateContext}
         />
       ) : null}
 
       {mainView === 'home' && (loadState === 'loading' || loadState === 'idle') ? (
-        <div className="center-state">
-          <Loader2 className="spin" size={30} />
-          <p>Loading podcast episodes</p>
-        </div>
+        <div className="center-state"><Loader2 className="spin" size={30} /><p>Loading podcast episodes</p></div>
       ) : null}
 
       {mainView === 'home' && loadState === 'error' ? (
-        <div className="center-state error">
-          <AlertCircle size={32} />
-          <p>{loadError}</p>
-          <button className="primary-button" type="button" onClick={() => setRefreshKey((key) => key + 1)}>
-            Retry
-          </button>
-        </div>
+        <div className="center-state error"><AlertCircle size={32} /><p>{loadError}</p><button className="primary-button" type="button" onClick={() => setRefreshKey((key) => key + 1)}>Retry</button></div>
       ) : null}
 
-      {mainView === 'home' && podcastData && loadState === 'ready' && !selectedEpisode ? (
+      {mainView === 'home' && podcastData && loadState === 'ready' && !selectedDetail ? (
         <main className="page-shell">
           <div className="podcast-tabs" role="tablist" aria-label="Podcast library">
-            <button role="tab" aria-selected={podcastTab === 'class'} className={podcastTab === 'class' ? 'active' : ''} type="button" onClick={() => setPodcastTab('class')}>Class Podcast</button>
-            <button role="tab" aria-selected={podcastTab === 'mine'} className={podcastTab === 'mine' ? 'active' : ''} type="button" onClick={() => setPodcastTab('mine')}>My Podcasts</button>
+            <button role="tab" aria-selected={podcastTab === 'class'} className={podcastTab === 'class' ? 'active' : ''} type="button" onClick={() => switchTab('class')}>Class Podcast</button>
+            <button role="tab" aria-selected={podcastTab === 'mine'} className={podcastTab === 'mine' ? 'active' : ''} type="button" onClick={() => switchTab('mine')}>My Podcasts</button>
           </div>
           {podcastTab === 'class' ? (
             <PodcastOverview
               data={podcastData}
-              activeEpisodeId={selectedEpisodeId}
-              playingId={playingId}
-              onSelectEpisode={selectEpisode}
-              onPlayAll={playAll}
-              onPlayEpisode={playEpisode}
+              playingKey={playingKey}
+              onSelectEpisode={(episode) => openDetail({ source: 'class', id: episode.id })}
+              onPlayAll={() => { const first = podcastData.episodes[0]; if (first) void playClassEpisode(first); }}
+              onPlayEpisode={playClassEpisode}
               onRefresh={() => setRefreshKey((key) => key + 1)}
               generatingId={generatingId}
               onCreate={() => setMainView('creator')}
@@ -425,46 +382,41 @@ export function App() {
             <MyPodcasts
               podcasts={myPodcasts}
               loading={myPodcastsLoading}
+              playingKey={playingKey}
               onCreate={() => setMainView('creator')}
-              onRetry={async (podcast) => {
-                if (!bridge.context?.userId || !bridge.token?.accessToken) return;
-                await retryMyPodcast(bridge.context.classId, podcast.id, bridge.context.userId, bridge.token.accessToken);
-                await refreshMyPodcasts();
-              }}
-              onDelete={async (podcast) => {
-                if (!bridge.context?.userId || !bridge.token?.accessToken) return;
-                await deleteMyPodcast(
-                  bridge.context.classId,
-                  podcast.id,
-                  bridge.context.userId,
-                  bridge.token.accessToken,
-                );
-                setMyPodcasts((current) => current.filter((item) => item.id !== podcast.id));
-              }}
+              onOpen={(podcast) => openDetail({ source: 'personal', id: podcast.id })}
+              onPlay={playPersonalPodcast}
+              onRetry={retryPersonal}
+              onDelete={deletePersonal}
             />
           )}
         </main>
       ) : null}
 
-      {mainView === 'home' && podcastData && selectedEpisode ? (
-        <EpisodeDetail
-          podcast={podcastData.podcast}
-          episode={selectedEpisode}
-          durationLabel={selectedEpisodeDurationLabel}
-          isPlaying={playingId === selectedEpisode.id}
-          isGenerating={generatingId === selectedEpisode.id}
-          generationError={generationError}
-          onBack={() => setSelectedEpisodeId(null)}
-          onTogglePlay={() => playEpisode(selectedEpisode)}
+      {mainView === 'home' && detailItem ? (
+        <PodcastDetail
+          item={detailItem}
+          isPlaying={playingKey === podcastViewKey(detailItem)}
+          isBusy={detailItem.source === 'class' && generatingId === detailItem.id}
+          error={generationError}
+          onBack={closeDetail}
+          onTogglePlay={() => {
+            if (detailItem.source === 'class') {
+              const episode = podcastData?.episodes.find((item) => item.id === detailItem.id);
+              if (episode) return playClassEpisode(episode);
+            } else {
+              const podcast = myPodcasts.find((item) => item.id === detailItem.id);
+              if (podcast) playPersonalPodcast(podcast);
+            }
+          }}
+          onRetry={detailItem.source === 'personal' ? async () => {
+            const podcast = myPodcasts.find((item) => item.id === detailItem.id);
+            if (podcast) await retryPersonal(podcast);
+          } : undefined}
         />
       ) : null}
 
-      {bridge.error ? (
-        <div className="bridge-warning">
-          <Radio size={16} />
-          {bridge.error}
-        </div>
-      ) : null}
+      {bridge.error ? <div className="bridge-warning"><Radio size={16} />{bridge.error}</div> : null}
     </div>
   );
 }

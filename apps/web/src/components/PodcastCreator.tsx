@@ -6,6 +6,7 @@ import {
   Clock3,
   FileText,
   Loader2,
+  Play,
   RadioTower,
   RotateCcw,
   Sparkles,
@@ -20,6 +21,7 @@ interface Props {
   token: string;
   onCancel: () => void;
   onComplete: () => void;
+  onPlayReady: (podcast: PersonalPodcast) => void;
   onContextChange?: (context: string) => void;
 }
 
@@ -30,7 +32,7 @@ const examples = [
 ];
 const steps = ['Idea', 'Materials', 'Length', 'Difficulty', 'Generate'];
 
-export function PodcastCreator({ classId, userId, token, onCancel, onComplete, onContextChange }: Props) {
+export function PodcastCreator({ classId, userId, token, onCancel, onComplete, onPlayReady, onContextChange }: Props) {
   const [step, setStep] = useState(0);
   const [prompt, setPrompt] = useState('');
   const [materials, setMaterials] = useState<DemoMaterial[]>([]);
@@ -142,7 +144,10 @@ export function PodcastCreator({ classId, userId, token, onCancel, onComplete, o
             </button>
           ) : null}
           {podcast.status === 'ready' ? (
-            <><audio controls src={podcast.audioUrl} /><button className="primary-button" type="button" onClick={onComplete}>View My Podcasts</button></>
+            <>
+              <button className="secondary-button" type="button" onClick={() => onPlayReady(podcast)}><Play size={17} fill="currentColor" /> Play podcast</button>
+              <button className="primary-button" type="button" onClick={onComplete}>View My Podcasts</button>
+            </>
           ) : null}
           {podcast.status !== 'ready' && podcast.status !== 'failed' ? <button className="text-button" type="button" onClick={onComplete}>Continue browsing</button> : null}
         </div>

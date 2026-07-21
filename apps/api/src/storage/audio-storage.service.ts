@@ -13,11 +13,12 @@ import { Readable } from 'node:stream';
 export interface AudioObjectMetadata {
   contentType: string;
   contentLength?: number;
+  contentRange?: string;
 }
 
 export interface AudioStorage {
   upload(key: string, bytes: Buffer, contentType?: string): Promise<void>;
-  stream(key: string): Promise<{ body: Readable; metadata: AudioObjectMetadata }>;
+  stream(key: string, range?: string): Promise<{ body: Readable; metadata: AudioObjectMetadata }>;
   exists(key: string): Promise<boolean>;
   delete(key: string): Promise<void>;
   healthCheck(): Promise<void>;
@@ -62,12 +63,18 @@ export class AudioStorageService implements AudioStorage, OnModuleInit {
     );
   }
 
-  async stream(key: string) {
-    const result = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
+  async stream(key: string, range?: string) {
+    const result = await this.client.send(
+      new GetObjectCommand({ Bucket: this.bucket, Key: key, ...(range ? { Range: range } : {}) }),
+    );
     if (!(result.Body instanceof Readable)) throw new Error(`Audio object ${key} is not streamable`);
     return {
       body: result.Body,
-      metadata: { contentType: result.ContentType ?? 'audio/mpeg', contentLength: result.ContentLength },
+      metadata: {
+        contentType: result.ContentType ?? 'audio/mpeg',
+        contentLength: result.ContentLength,
+        contentRange: result.ContentRange,
+      },
     };
   }
 

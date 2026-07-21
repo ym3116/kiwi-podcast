@@ -21,6 +21,15 @@ runtime and keep fast reloads and local `node_modules`.
 npm install
 ```
 
+Install FFmpeg if it is not already available. On macOS:
+
+```bash
+brew install ffmpeg
+```
+
+Podcast audio is synthesized as short WAV segments, normalized and assembled
+with FFmpeg, then encoded once as a 192 kbps MP3 for MinIO delivery.
+
 3. Create `apps/api/.env`:
 
 ```bash
@@ -208,6 +217,9 @@ npm run clean
 - Generated podcast metadata, scripts, and jobs live in PostgreSQL.
 - MP3 objects live in the private MinIO `kiwi-podcasts` bucket and persist in
   the Docker `minio-data` volume.
+- Intermediate WAV files use a unique OS temporary directory and are deleted in
+  a `finally` cleanup on success or failure. Generation also removes abandoned
+  Kiwi audio workspaces older than six hours to recover from process crashes.
 - `apps/api/dist` and `apps/web/dist` are ignored, disposable build output.
 - Standalone Simulator mode still works when opening `http://localhost:8000`
   outside Kiwi.

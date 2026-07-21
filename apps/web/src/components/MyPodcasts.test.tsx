@@ -30,7 +30,10 @@ describe('MyPodcasts deletion', () => {
       <MyPodcasts
         podcasts={[podcast]}
         loading={false}
+        playingKey={null}
         onCreate={vi.fn()}
+        onOpen={vi.fn()}
+        onPlay={vi.fn()}
         onRetry={vi.fn()}
         onDelete={onDelete}
       />,

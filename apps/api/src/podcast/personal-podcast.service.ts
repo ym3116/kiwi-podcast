@@ -5,7 +5,7 @@ import { AudioStorageService } from '../storage/audio-storage.service';
 import { LocalDemoChunkSource } from './local-demo-chunk-source';
 import { PodcastDifficulty } from './podcast-generation.types';
 import { ScriptGeneratorService } from './script-generator.service';
-import { TtsService } from './tts.service';
+import { AudioProductionService } from './audio-production.service';
 
 export interface CreatePersonalPodcastInput {
   ownerUserId: string;
@@ -26,7 +26,7 @@ export class PersonalPodcastService {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(LocalDemoChunkSource) private readonly source: LocalDemoChunkSource,
     @Inject(ScriptGeneratorService) private readonly scripts: ScriptGeneratorService,
-    @Inject(TtsService) private readonly tts: TtsService,
+    @Inject(AudioProductionService) private readonly audioProduction: AudioProductionService,
     @Inject(AudioStorageService) private readonly audioStorage: AudioStorageService,
   ) {}
 
@@ -154,7 +154,15 @@ export class PersonalPodcastService {
         summary: script.summary,
         turns: script.turns as unknown as Prisma.InputJsonValue,
       });
-      const audio = await this.tts.synthesize(script);
+      const audio = await this.audioProduction.produce(script, async ({ completedSegments, totalSegments }) => {
+        const progress = 55 + Math.round((completedSegments / totalSegments) * 30);
+        await this.stage(
+          id,
+          'generating_audio',
+          progress,
+          `Generating host voices — ${completedSegments} of ${totalSegments}`,
+        );
+      });
       await this.stage(id, 'saving', 95, 'Saving your podcast');
       const storageKey = `personal/${this.safeKeyPart(podcast.ownerUserId)}/${id}.mp3`;
       await this.audioStorage.upload(storageKey, audio);

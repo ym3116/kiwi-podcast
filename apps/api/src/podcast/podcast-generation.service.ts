@@ -4,7 +4,7 @@ import { LocalDemoChunkSource, PodcastChunkSource } from './local-demo-chunk-sou
 import { PodcastArtifactStore } from './podcast-artifact.store';
 import { GeneratePodcastResult, PodcastJob } from './podcast-generation.types';
 import { ScriptGeneratorService } from './script-generator.service';
-import { TtsService } from './tts.service';
+import { AudioProductionService } from './audio-production.service';
 
 @Injectable()
 export class PodcastGenerationService {
@@ -12,7 +12,7 @@ export class PodcastGenerationService {
     @Inject(LocalDemoChunkSource) private readonly chunkSource: PodcastChunkSource,
     @Inject(PodcastArtifactStore) private readonly artifacts: PodcastArtifactStore,
     @Inject(ScriptGeneratorService) private readonly scripts: ScriptGeneratorService,
-    @Inject(TtsService) private readonly tts: TtsService,
+    @Inject(AudioProductionService) private readonly audioProduction: AudioProductionService,
   ) {}
 
   async generate(classId: string, documentId: string): Promise<GeneratePodcastResult> {
@@ -34,7 +34,7 @@ export class PodcastGenerationService {
       const chunks = await this.chunkSource.getChunks(classId, documentId);
       const script = await this.scripts.generate(chunks);
       const { scriptPath } = await this.artifacts.writeScript(episodeId, script);
-      const audio = await this.tts.synthesize(script);
+      const audio = await this.audioProduction.produce(script);
       const { storageKey } = await this.artifacts.writeAudio(episodeId, audio);
       const generatedAt = new Date().toISOString();
 

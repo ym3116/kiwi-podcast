@@ -9,23 +9,7 @@ describe('TtsService', () => {
     vi.restoreAllMocks();
   });
 
-  it('builds multi-speaker dialogue with Higgs speaker tags', () => {
-    const service = new TtsService();
-
-    expect(
-      service.buildDialogue({
-        title: 'Title',
-        summary: 'Summary',
-        durationTargetMinutes: 3,
-        turns: [
-          { speaker: 'HOST_A', text: 'Hello.' },
-          { speaker: 'HOST_B', text: 'Welcome.' },
-        ],
-      }),
-    ).toBe('[SPEAKER0] Hello.\n[SPEAKER1] Welcome.');
-  });
-
-  it('sends required voice and JSON instructions to the TTS API', async () => {
+  it('requests a WAV segment with stable speaker instructions', async () => {
     process.env.TTS_BASE_URL = 'https://tts.example.test';
     process.env.TTS_API_KEY = 'tts-key';
     process.env.TTS_MODEL = 'higgs-audio-v2';
@@ -36,12 +20,7 @@ describe('TtsService', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const service = new TtsService();
-    const audio = await service.synthesize({
-      title: 'Title',
-      summary: 'Summary',
-      durationTargetMinutes: 3,
-      turns: [{ speaker: 'HOST_A', text: 'Hello.' }],
-    });
+    const audio = await service.synthesizeSegment({ speaker: 'HOST_A', text: 'Hello.' });
 
     expect(fetchMock).toHaveBeenCalledWith(
       'https://tts.example.test/v1/audio/speech',
@@ -51,9 +30,16 @@ describe('TtsService', () => {
     expect(body).toMatchObject({
       model: 'higgs-audio-v2',
       voice: 'alloy',
-      response_format: 'mp3',
+      response_format: 'wav',
+      input: '[SPEAKER0] Hello.',
     });
     expect(JSON.parse(body.instructions).system_prompt).toContain('SPEAKER0');
+    expect(JSON.parse(body.instructions).seed).toBe(12345);
     expect(audio).toEqual(Buffer.from([1, 2, 3]));
+  });
+
+  it('uses a different stable seed for the second host', () => {
+    const service = new TtsService();
+    expect(JSON.parse(service.buildInstructions('HOST_B')).seed).toBe(67890);
   });
 });

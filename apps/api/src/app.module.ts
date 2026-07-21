@@ -10,6 +10,7 @@ import { PodcastService } from './podcast/podcast.service';
 import { ScriptGeneratorService } from './podcast/script-generator.service';
 import { TtsService } from './podcast/tts.service';
 import { PersonalPodcastService } from './podcast/personal-podcast.service';
+import { AudioProductionService } from './podcast/audio-production.service';
 import { AUDIO_S3_CLIENT, AudioStorageService, createAudioS3Client } from './storage/audio-storage.service';
 
 @Module({
@@ -24,6 +25,7 @@ import { AUDIO_S3_CLIENT, AudioStorageService, createAudioS3Client } from './sto
     ScriptGeneratorService,
     TtsService,
     PersonalPodcastService,
+    AudioProductionService,
     AudioStorageService,
     { provide: AUDIO_S3_CLIENT, useFactory: createAudioS3Client },
   ],

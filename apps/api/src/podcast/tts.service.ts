@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { GeneratedPodcastScript, PodcastTurn } from './podcast-generation.types';
+import { PodcastTurn } from './podcast-generation.types';
 
 @Injectable()
 export class TtsService {
@@ -7,13 +7,7 @@ export class TtsService {
   private readonly apiKey = process.env.TTS_API_KEY;
   private readonly model = process.env.TTS_MODEL ?? 'higgs-audio-v2';
 
-  buildDialogue(script: GeneratedPodcastScript): string {
-    return script.turns
-      .map((turn) => `${this.speakerTag(turn)} ${turn.text}`)
-      .join('\n');
-  }
-
-  buildInstructions(): string {
+  buildInstructions(speaker: PodcastTurn['speaker']): string {
     const systemPrompt = [
       'You are an AI assistant designed to convert text into speech.',
       'If the user message includes a [SPEAKER*] tag, do not read out the tag. Use the specified voice for the following text.',
@@ -25,12 +19,12 @@ export class TtsService {
 
     return JSON.stringify({
       system_prompt: systemPrompt,
-      seed: 12345,
-      temperature: 0.5,
+      seed: speaker === 'HOST_A' ? 12345 : 67890,
+      temperature: Number(process.env.TTS_TEMPERATURE ?? 0.3),
     });
   }
 
-  async synthesize(script: GeneratedPodcastScript): Promise<Buffer> {
+  async synthesizeSegment(turn: PodcastTurn): Promise<Buffer> {
     if (!this.apiKey) {
       throw new Error('TTS_API_KEY must be configured');
     }
@@ -44,9 +38,9 @@ export class TtsService {
       body: JSON.stringify({
         model: this.model,
         voice: 'alloy',
-        instructions: this.buildInstructions(),
-        input: this.buildDialogue(script),
-        response_format: 'mp3',
+        instructions: this.buildInstructions(turn.speaker),
+        input: `${this.speakerTag(turn)} ${turn.text}`,
+        response_format: 'wav',
       }),
     });
 

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { PodcastArtifactStore } from './podcast-artifact.store';
 import { PodcastGenerationService } from './podcast-generation.service';
 import { ScriptGeneratorService } from './script-generator.service';
-import { TtsService } from './tts.service';
+import { AudioProductionService } from './audio-production.service';
 
 describe('PodcastGenerationService', () => {
   it('moves a job through generating to ready', async () => {
@@ -25,7 +25,7 @@ describe('PodcastGenerationService', () => {
           turns: [{ speaker: 'HOST_A', text: 'Welcome.' }],
         }),
       } as unknown as ScriptGeneratorService,
-      { synthesize: vi.fn().mockResolvedValue(Buffer.from([1])) } as unknown as TtsService,
+      { produce: vi.fn().mockResolvedValue(Buffer.from([1])) } as unknown as AudioProductionService,
     );
 
     const result = await service.generate('class-1', 'doc-1');
@@ -43,7 +43,7 @@ describe('PodcastGenerationService', () => {
       },
       store as unknown as PodcastArtifactStore,
       {} as ScriptGeneratorService,
-      {} as TtsService,
+      {} as AudioProductionService,
     );
 
     const result = await service.generate('class-1', 'doc-1');
@@ -60,7 +60,7 @@ describe('PodcastGenerationService', () => {
       { getChunks },
       store as unknown as PodcastArtifactStore,
       {} as ScriptGeneratorService,
-      {} as TtsService,
+      {} as AudioProductionService,
     );
 
     const result = await service.generate('class-1', 'doc-1');

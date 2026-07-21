@@ -41,7 +41,7 @@ describe('AudioStorageService', () => {
     await service.onModuleInit();
     await service.upload('personal/user/podcast.mp3', Buffer.from('mp3'));
     const result = await service.stream('personal/user/podcast.mp3');
-    expect(result.metadata).toEqual({ contentType: 'audio/mpeg', contentLength: 3 });
+    expect(result.metadata).toEqual({ contentType: 'audio/mpeg', contentLength: 3, contentRange: undefined });
     expect(await service.exists('personal/user/podcast.mp3')).toBe(true);
     await service.delete('personal/user/podcast.mp3');
 
@@ -53,6 +53,26 @@ describe('AudioStorageService', () => {
       'HeadObjectCommand',
       'DeleteObjectCommand',
     ]);
+  });
+
+  it('passes byte ranges to object storage for seekable playback', async () => {
+    const send = vi.fn(async (command: { input?: { Range?: string } }) => ({
+      Body: Readable.from(Buffer.from('partial')),
+      ContentType: 'audio/mpeg',
+      ContentLength: 7,
+      ContentRange: 'bytes 15-21/100',
+      requestedRange: command.input?.Range,
+    }));
+    const service = new AudioStorageService({ send } as never);
+
+    const result = await service.stream('episode.mp3', 'bytes=15-21');
+
+    expect(send.mock.calls[0][0].input?.Range).toBe('bytes=15-21');
+    expect(result.metadata).toEqual({
+      contentType: 'audio/mpeg',
+      contentLength: 7,
+      contentRange: 'bytes 15-21/100',
+    });
   });
 
   it('reports missing objects without throwing', async () => {
