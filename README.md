@@ -27,8 +27,11 @@ Install FFmpeg if it is not already available. On macOS:
 brew install ffmpeg
 ```
 
-Podcast audio is synthesized as short WAV segments, normalized and assembled
-with FFmpeg, then encoded once as a 192 kbps MP3 for MinIO delivery.
+Podcast audio uses the TTS service's two-phase multi-speaker protocol. The API
+builds one reference-voice anchor for each host, sends complete alternating
+turns in bounded multi-speaker chunks, validates and concatenates the returned
+WAV files, then encodes one 192 kbps MP3 for MinIO delivery. Temporary audio is
+removed after both successful and failed generation.
 
 3. Create `apps/api/.env`:
 

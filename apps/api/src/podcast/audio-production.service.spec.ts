@@ -1,81 +1,127 @@
+import { spawnSync } from 'node:child_process';
 import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AudioProductionService } from './audio-production.service';
 
 const ffmpegAvailable = spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' }).status === 0;
 const tempRoots: string[] = [];
+const originalEnv = { ...process.env };
 
 afterEach(async () => {
   await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
-  delete process.env.PODCAST_AUDIO_TEMP_DIR;
+  process.env = { ...originalEnv };
 });
 
 describe('AudioProductionService', () => {
-  it('splits long turns without changing speaker order', () => {
+  it('groups complete turns into ordered multi-speaker chunks', () => {
     const service = new AudioProductionService({} as never);
-    const segments = service.segmentTurns([
-      { speaker: 'HOST_A', text: 'One two three four. Five six seven eight.' },
-      { speaker: 'HOST_B', text: 'Reply.' },
-    ], 5);
-    expect(segments).toEqual([
-      { speaker: 'HOST_A', text: 'One two three four.' },
-      { speaker: 'HOST_A', text: 'Five six seven eight.' },
-      { speaker: 'HOST_B', text: 'Reply.' },
+    const chunks = service.buildChunks(
+      [
+        { speaker: 'HOST_A', text: 'One two three.' },
+        { speaker: 'HOST_B', text: 'Four five six.' },
+        { speaker: 'HOST_A', text: 'Seven eight nine.' },
+      ],
+      55,
+    );
+
+    expect(chunks).toEqual([
+      [
+        { speaker: 'HOST_A', text: 'One two three.' },
+        { speaker: 'HOST_B', text: 'Four five six.' },
+      ],
+      [{ speaker: 'HOST_A', text: 'Seven eight nine.' }],
     ]);
   });
 
-  it('removes its temporary workspace when TTS returns invalid WAV data', async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'kiwi-audio-test-'));
-    tempRoots.push(root);
-    process.env.PODCAST_AUDIO_TEMP_DIR = root;
-    const service = new AudioProductionService({
-      synthesizeSegment: vi.fn(async () => Buffer.from('not wav')),
-    } as never);
+  it('splits only an individually oversized turn and preserves its speaker', () => {
+    const service = new AudioProductionService({} as never);
+    const chunks = service.buildChunks(
+      [{ speaker: 'HOST_A', text: 'One two three four five six seven eight nine ten.' }],
+      32,
+    );
 
-    await expect(
-      service.produce({
-        title: 'Test',
-        summary: 'Test',
-        durationTargetMinutes: 1,
-        turns: [{ speaker: 'HOST_A', text: 'Hello.' }],
+    expect(chunks.flat()).toHaveLength(3);
+    expect(chunks.flat().every((turn) => turn.speaker === 'HOST_A')).toBe(true);
+    expect(chunks.flat().map((turn) => turn.text).join(' ')).toBe(
+      'One two three four five six seven eight nine ten.',
+    );
+  });
+
+  it('builds anchors in speaker order and removes temporary files when a chunk is invalid', async () => {
+    const root = await testRoot();
+    const tts = {
+      buildAnchor: vi.fn(async () => silentWav()),
+      synthesizeChunk: vi.fn(async () => Buffer.from('not wav')),
+    };
+    const service = new AudioProductionService(tts as never);
+
+    await expect(service.produce(script())).rejects.toThrow('invalid WAV for chunk 1');
+    expect(tts.buildAnchor).toHaveBeenNthCalledWith(1, 'HOST_A', expect.stringMatching(/^host-/));
+    expect(tts.buildAnchor).toHaveBeenNthCalledWith(2, 'HOST_B', expect.stringMatching(/^guest-/));
+    expect(tts.synthesizeChunk).toHaveBeenCalledWith(
+      script().turns,
+      expect.objectContaining({
+        SPEAKER0: expect.stringMatching(/^host-/),
+        SPEAKER1: expect.stringMatching(/^guest-/),
       }),
-    ).rejects.toThrow('invalid WAV');
+    );
     expect(await readdir(root)).toEqual([]);
   });
 
-  it.skipIf(!ffmpegAvailable)('normalizes WAV segments and produces one MP3 without leaving temporary files', async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'kiwi-audio-test-'));
-    tempRoots.push(root);
-    process.env.PODCAST_AUDIO_TEMP_DIR = root;
+  it.skipIf(!ffmpegAvailable)('assembles multi-speaker WAV chunks and produces one MP3 without temporary files', async () => {
+    const root = await testRoot();
+    process.env.PODCAST_TTS_CHUNK_CHARS = '32';
+    process.env.PODCAST_CHUNK_GAP_SECONDS = '0.01';
     const progress = vi.fn();
-    const service = new AudioProductionService({
-      synthesizeSegment: vi.fn(async () => silentWav()),
-    } as never);
-    const mp3 = await service.produce(
-      {
-        title: 'Test',
-        summary: 'Test',
-        durationTargetMinutes: 1,
-        turns: [
-          { speaker: 'HOST_A', text: 'Hello.' },
-          { speaker: 'HOST_B', text: 'Welcome.' },
-        ],
-      },
-      progress,
-    );
+    const tts = {
+      buildAnchor: vi.fn(async () => silentWav()),
+      synthesizeChunk: vi.fn(async () => silentWav()),
+    };
+    const service = new AudioProductionService(tts as never);
+    const mp3 = await service.produce(script(), progress);
 
     expect(mp3.length).toBeGreaterThan(0);
-    expect(progress).toHaveBeenLastCalledWith({ completedSegments: 2, totalSegments: 2 });
+    expect(tts.buildAnchor).toHaveBeenCalledTimes(2);
+    expect(tts.synthesizeChunk).toHaveBeenCalledTimes(2);
+    expect(tts.synthesizeChunk).toHaveBeenNthCalledWith(
+      1,
+      [script().turns[0]],
+      expect.objectContaining({ SPEAKER0: expect.any(String), SPEAKER1: expect.any(String) }),
+    );
+    expect(tts.synthesizeChunk).toHaveBeenNthCalledWith(
+      2,
+      [script().turns[1]],
+      expect.objectContaining({ SPEAKER0: expect.any(String), SPEAKER1: expect.any(String) }),
+    );
+    expect(progress).toHaveBeenLastCalledWith({ completedChunks: 2, totalChunks: 2 });
     expect(await readdir(root)).toEqual([]);
   });
 });
 
+async function testRoot() {
+  const root = await mkdtemp(path.join(tmpdir(), 'kiwi-audio-test-'));
+  tempRoots.push(root);
+  process.env.PODCAST_AUDIO_TEMP_DIR = root;
+  return root;
+}
+
+function script() {
+  return {
+    title: 'Test',
+    summary: 'Test',
+    durationTargetMinutes: 1,
+    turns: [
+      { speaker: 'HOST_A' as const, text: 'Hello.' },
+      { speaker: 'HOST_B' as const, text: 'Welcome.' },
+    ],
+  };
+}
+
 function silentWav(): Buffer {
-  const sampleRate = 44100;
-  const samples = 4410;
+  const sampleRate = 24000;
+  const samples = 2400;
   const dataSize = samples * 2;
   const wav = Buffer.alloc(44 + dataSize);
   wav.write('RIFF', 0);

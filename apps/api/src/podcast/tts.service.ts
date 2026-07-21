@@ -1,33 +1,112 @@
 import { Injectable } from '@nestjs/common';
 import { PodcastTurn } from './podcast-generation.types';
 
+export type TtsSpeakerTag = 'SPEAKER0' | 'SPEAKER1';
+export type TtsAnchorMap = Record<TtsSpeakerTag, string>;
+
+interface TtsSpeakerConfig {
+  tag: TtsSpeakerTag;
+  voice: string;
+  description: string;
+  referenceText: string;
+}
+
 @Injectable()
 export class TtsService {
   private readonly baseUrl = process.env.TTS_BASE_URL ?? 'https://litellm.tunnel.kiwiai.org';
   private readonly apiKey = process.env.TTS_API_KEY;
   private readonly model = process.env.TTS_MODEL ?? 'higgs-audio-v2';
+  private readonly temperature = Number(process.env.TTS_TEMPERATURE ?? 0.5);
+  private readonly multiSeed = Number(process.env.TTS_MULTI_SEED ?? 12345);
+  private readonly scene =
+    process.env.TTS_SCENE_DESCRIPTION ??
+    'The scene is two people having a lively, friendly podcast conversation. They are engaged, enthusiastic and animated, speaking with genuine emotion.';
 
-  buildInstructions(speaker: PodcastTurn['speaker']): string {
-    const systemPrompt = [
-      'You are an AI assistant designed to convert text into speech.',
-      'If the user message includes a [SPEAKER*] tag, do not read out the tag. Use the specified voice for the following text.',
-      '<|scene_desc_start|>',
-      'SPEAKER0: A bright female voice, friendly, clear, American accent.',
-      'SPEAKER1: A warm male voice, calm, clear, American accent.',
-      '<|scene_desc_end|>',
-    ].join('\n');
+  private readonly speakers: Record<PodcastTurn['speaker'], TtsSpeakerConfig> = {
+    HOST_A: {
+      tag: 'SPEAKER0',
+      voice: process.env.TTS_HOST_A_VOICE ?? 'nova',
+      description:
+        process.env.TTS_HOST_A_DESCRIPTION ??
+        'A bright female voice, warm, expressive and enthusiastic, American accent.',
+      referenceText:
+        process.env.TTS_HOST_A_REFERENCE_TEXT ??
+        'Hi! I am so excited to dive into this with you today.',
+    },
+    HOST_B: {
+      tag: 'SPEAKER1',
+      voice: process.env.TTS_HOST_B_VOICE ?? 'onyx',
+      description:
+        process.env.TTS_HOST_B_DESCRIPTION ??
+        'A lively male voice, warm, engaged and upbeat, British accent.',
+      referenceText:
+        process.env.TTS_HOST_B_REFERENCE_TEXT ??
+        'Absolutely, I have been looking forward to this all week.',
+    },
+  };
 
-    return JSON.stringify({
-      system_prompt: systemPrompt,
-      seed: speaker === 'HOST_A' ? 12345 : 67890,
-      temperature: Number(process.env.TTS_TEMPERATURE ?? 0.3),
+  async buildAnchor(speaker: PodcastTurn['speaker'], anchor: string): Promise<Buffer> {
+    const config = this.speakers[speaker];
+    return this.requestSpeech({
+      voice: config.voice,
+      input: config.referenceText,
+      instructions: JSON.stringify({
+        mode: 'build_anchor',
+        anchor,
+        voice: config.voice,
+        temperature: this.temperature,
+      }),
     });
   }
 
-  async synthesizeSegment(turn: PodcastTurn): Promise<Buffer> {
-    if (!this.apiKey) {
-      throw new Error('TTS_API_KEY must be configured');
-    }
+  async synthesizeChunk(turns: PodcastTurn[], anchors: TtsAnchorMap): Promise<Buffer> {
+    if (turns.length === 0) throw new Error('Cannot synthesize an empty podcast chunk');
+
+    const refTexts: Record<TtsSpeakerTag, string> = {
+      SPEAKER0: this.speakers.HOST_A.referenceText,
+      SPEAKER1: this.speakers.HOST_B.referenceText,
+    };
+    const orderedAnchors: TtsAnchorMap = {
+      SPEAKER0: anchors.SPEAKER0,
+      SPEAKER1: anchors.SPEAKER1,
+    };
+
+    return this.requestSpeech({
+      voice: 'alloy',
+      input: turns.map((turn) => this.formatTurn(turn)).join('\n'),
+      instructions: JSON.stringify({
+        mode: 'multi',
+        speakers: orderedAnchors,
+        system_prompt: this.buildSystemPrompt(),
+        seed: this.multiSeed,
+        temperature: this.temperature,
+        ref_texts: refTexts,
+      }),
+    });
+  }
+
+  formatTurn(turn: PodcastTurn): string {
+    return `[${this.speakers[turn.speaker].tag}] ${turn.text.trim()}`;
+  }
+
+  buildSystemPrompt(): string {
+    return [
+      'You are an AI assistant designed to convert text into speech.',
+      "If the user's message includes a [SPEAKER*] tag, do not read out the tag and generate speech for the following text, using the specified voice.",
+      '<|scene_desc_start|>',
+      `SPEAKER0: ${this.speakers.HOST_A.description}`,
+      `SPEAKER1: ${this.speakers.HOST_B.description}`,
+      this.scene,
+      '<|scene_desc_end|>',
+    ].join('\n');
+  }
+
+  private async requestSpeech(input: {
+    voice: string;
+    input: string;
+    instructions: string;
+  }): Promise<Buffer> {
+    if (!this.apiKey) throw new Error('TTS_API_KEY must be configured');
 
     const response = await fetch(this.openAiUrl('/audio/speech'), {
       method: 'POST',
@@ -37,9 +116,9 @@ export class TtsService {
       },
       body: JSON.stringify({
         model: this.model,
-        voice: 'alloy',
-        instructions: this.buildInstructions(turn.speaker),
-        input: `${this.speakerTag(turn)} ${turn.text}`,
+        voice: input.voice,
+        instructions: input.instructions,
+        input: input.input,
         response_format: 'wav',
       }),
     });
@@ -50,10 +129,6 @@ export class TtsService {
     }
 
     return Buffer.from(await response.arrayBuffer());
-  }
-
-  private speakerTag(turn: PodcastTurn): string {
-    return turn.speaker === 'HOST_A' ? '[SPEAKER0]' : '[SPEAKER1]';
   }
 
   private openAiUrl(pathname: string): string {

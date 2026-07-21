@@ -154,13 +154,13 @@ export class PersonalPodcastService {
         summary: script.summary,
         turns: script.turns as unknown as Prisma.InputJsonValue,
       });
-      const audio = await this.audioProduction.produce(script, async ({ completedSegments, totalSegments }) => {
-        const progress = 55 + Math.round((completedSegments / totalSegments) * 30);
+      const audio = await this.audioProduction.produce(script, async ({ completedChunks, totalChunks }) => {
+        const progress = 55 + Math.round((completedChunks / totalChunks) * 30);
         await this.stage(
           id,
           'generating_audio',
           progress,
-          `Generating host voices — ${completedSegments} of ${totalSegments}`,
+          `Generating conversation — chunk ${completedChunks} of ${totalChunks}`,
         );
       });
       await this.stage(id, 'saving', 95, 'Saving your podcast');

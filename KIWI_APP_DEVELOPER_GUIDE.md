@@ -88,11 +88,12 @@ audio asset records in PostgreSQL. MP3 bytes are stored in a private MinIO
 bucket and streamed through the API. PostgreSQL and MinIO run in Docker while
 the web and API run locally. Start infrastructure with:
 
-The production pipeline requests short WAV segments from TTS, validates and
-normalizes them with FFmpeg, inserts controlled speaker pauses, concatenates a
-WAV master, and encodes one 192 kbps MP3. Its unique OS temporary workspace is
-always removed after generation; stale workspaces from interrupted processes
-are removed on the next run.
+The production pipeline first builds one reference-voice anchor per host, then
+requests bounded multi-speaker WAV chunks from TTS. The API validates the WAV
+responses, preserves chunk order, inserts a short gap only between chunks,
+concatenates a WAV master, and encodes one 192 kbps MP3. Its unique OS temporary
+workspace is always removed after generation; stale workspaces from interrupted
+processes are removed on the next run.
 
 ```bash
 npm run infra:up

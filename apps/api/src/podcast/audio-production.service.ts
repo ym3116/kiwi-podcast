@@ -1,21 +1,30 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { GeneratedPodcastScript, PodcastTurn } from './podcast-generation.types';
-import { TtsService } from './tts.service';
+import { TtsAnchorMap, TtsService } from './tts.service';
 
 export interface AudioProductionProgress {
-  completedSegments: number;
-  totalSegments: number;
+  completedChunks: number;
+  totalChunks: number;
+}
+
+interface WavFormat {
+  audioFormat: number;
+  channels: number;
+  sampleRate: number;
+  bitsPerSample: number;
 }
 
 @Injectable()
 export class AudioProductionService {
   private readonly ffmpegPath = process.env.FFMPEG_PATH ?? 'ffmpeg';
-  private readonly pauseSeconds = Number(process.env.PODCAST_SPEAKER_PAUSE_SECONDS ?? 0.35);
+  private readonly gapSeconds = Number(process.env.PODCAST_CHUNK_GAP_SECONDS ?? 0.25);
   private readonly bitrate = process.env.PODCAST_MP3_BITRATE ?? '192k';
+  private readonly chunkChars = this.positiveNumber(process.env.PODCAST_TTS_CHUNK_CHARS, 600);
   private readonly tempRoot = process.env.PODCAST_AUDIO_TEMP_DIR ?? tmpdir();
   private readonly staleWorkspaceMs = Number(
     process.env.PODCAST_AUDIO_TEMP_MAX_AGE_MS ?? 6 * 60 * 60 * 1000,
@@ -23,8 +32,31 @@ export class AudioProductionService {
 
   constructor(@Inject(TtsService) private readonly tts: TtsService) {}
 
-  segmentTurns(turns: PodcastTurn[], maxWords = 100): PodcastTurn[] {
-    return turns.flatMap((turn) => this.splitTurn(turn, maxWords));
+  buildChunks(turns: PodcastTurn[], maxChars = this.chunkChars): PodcastTurn[][] {
+    if (!Number.isFinite(maxChars) || maxChars < 32) {
+      throw new Error('Podcast TTS chunk size must be at least 32 characters');
+    }
+
+    const chunks: PodcastTurn[][] = [];
+    let current: PodcastTurn[] = [];
+    let currentChars = 0;
+
+    for (const original of turns) {
+      for (const turn of this.splitOversizedTurn(original, maxChars)) {
+        const lineChars = this.formatTurn(turn).length;
+        const nextChars = currentChars + (current.length > 0 ? 1 : 0) + lineChars;
+        if (current.length > 0 && nextChars > maxChars) {
+          chunks.push(current);
+          current = [];
+          currentChars = 0;
+        }
+        current.push(turn);
+        currentChars += (current.length > 1 ? 1 : 0) + lineChars;
+      }
+    }
+
+    if (current.length > 0) chunks.push(current);
+    return chunks;
   }
 
   async produce(
@@ -35,45 +67,56 @@ export class AudioProductionService {
     await this.cleanupStaleWorkspaces();
     const workspace = await mkdtemp(path.join(this.tempRoot, 'kiwi-podcast-audio-'));
     try {
-      const segments = this.segmentTurns(script.turns);
-      if (segments.length === 0) throw new Error('Podcast script has no audio segments');
+      const chunks = this.buildChunks(script.turns);
+      if (chunks.length === 0) throw new Error('Podcast script has no audio chunks');
 
-      const normalizedPaths: string[] = [];
-      for (const [index, segment] of segments.entries()) {
-        const rawPath = path.join(workspace, `segment-${this.pad(index)}-raw.wav`);
-        const normalizedPath = path.join(workspace, `segment-${this.pad(index)}.wav`);
-        const wav = await this.tts.synthesizeSegment(segment);
-        this.validateWav(wav, index);
-        await writeFile(rawPath, wav);
-        await this.runFfmpeg([
-          '-y',
-          '-i', rawPath,
-          '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11',
-          '-ar', '44100',
-          '-ac', '1',
-          '-c:a', 'pcm_s16le',
-          normalizedPath,
-        ]);
-        normalizedPaths.push(normalizedPath);
-        await onProgress?.({ completedSegments: index + 1, totalSegments: segments.length });
+      const runId = randomUUID().replace(/-/g, '').slice(0, 12);
+      const anchors: TtsAnchorMap = {
+        SPEAKER0: `host-${runId}`,
+        SPEAKER1: `guest-${runId}`,
+      };
+
+      const hostAnchor = await this.tts.buildAnchor('HOST_A', anchors.SPEAKER0);
+      this.validateWav(hostAnchor, 'HOST_A voice anchor');
+      const guestAnchor = await this.tts.buildAnchor('HOST_B', anchors.SPEAKER1);
+      this.validateWav(guestAnchor, 'HOST_B voice anchor');
+
+      const chunkPaths: string[] = [];
+      let expectedFormat: WavFormat | undefined;
+      for (const [index, chunk] of chunks.entries()) {
+        const wav = await this.tts.synthesizeChunk(chunk, anchors);
+        const format = this.validateWav(wav, `chunk ${index + 1}`);
+        if (expectedFormat) this.assertCompatibleFormat(expectedFormat, format, index);
+        else expectedFormat = format;
+
+        const chunkPath = path.join(workspace, `chunk-${this.pad(index)}.wav`);
+        await writeFile(chunkPath, wav);
+        chunkPaths.push(chunkPath);
+        await onProgress?.({ completedChunks: index + 1, totalChunks: chunks.length });
       }
 
-      const silencePath = path.join(workspace, 'silence.wav');
-      await this.runFfmpeg([
-        '-y',
-        '-f', 'lavfi',
-        '-i', 'anullsrc=r=44100:cl=mono',
-        '-t', String(this.pauseSeconds),
-        '-c:a', 'pcm_s16le',
-        silencePath,
-      ]);
+      if (!expectedFormat) throw new Error('TTS did not return any podcast audio');
+      const concatInputs = [...chunkPaths];
+      if (chunkPaths.length > 1 && this.gapSeconds > 0) {
+        const silencePath = path.join(workspace, 'silence.wav');
+        await this.runFfmpeg([
+          '-y',
+          '-f', 'lavfi',
+          '-i', `anullsrc=r=${expectedFormat.sampleRate}:cl=${this.channelLayout(expectedFormat.channels)}`,
+          '-t', String(this.gapSeconds),
+          '-c:a', 'pcm_s16le',
+          silencePath,
+        ]);
+        concatInputs.splice(
+          0,
+          concatInputs.length,
+          ...chunkPaths.flatMap((chunkPath, index) =>
+            index < chunkPaths.length - 1 ? [chunkPath, silencePath] : [chunkPath],
+          ),
+        );
+      }
 
       const concatPath = path.join(workspace, 'concat.txt');
-      const concatInputs = normalizedPaths.flatMap((segmentPath, index) =>
-        index < normalizedPaths.length - 1 && segments[index + 1].speaker !== segments[index].speaker
-          ? [segmentPath, silencePath]
-          : [segmentPath],
-      );
       await writeFile(
         concatPath,
         concatInputs.map((file) => `file '${file.replace(/'/g, "'\\''")}'`).join('\n'),
@@ -86,9 +129,8 @@ export class AudioProductionService {
         '-f', 'concat',
         '-safe', '0',
         '-i', concatPath,
-        '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11',
-        '-ar', '44100',
-        '-ac', '1',
+        '-ar', String(expectedFormat.sampleRate),
+        '-ac', String(expectedFormat.channels),
         '-c:a', 'pcm_s16le',
         masterPath,
       ]);
@@ -100,7 +142,7 @@ export class AudioProductionService {
         '-c:a', 'libmp3lame',
         '-b:a', this.bitrate,
         '-ar', '44100',
-        '-ac', '1',
+        '-ac', String(expectedFormat.channels),
         mp3Path,
       ]);
       const mp3 = await readFile(mp3Path);
@@ -111,47 +153,115 @@ export class AudioProductionService {
     }
   }
 
-  private splitTurn(turn: PodcastTurn, maxWords: number): PodcastTurn[] {
-    const words = turn.text.trim().split(/\s+/).filter(Boolean);
-    if (words.length <= maxWords) return [{ ...turn, text: turn.text.trim() }];
+  private splitOversizedTurn(turn: PodcastTurn, maxChars: number): PodcastTurn[] {
+    const clean = { ...turn, text: turn.text.trim() };
+    if (!clean.text) return [];
+    const maxTextChars = maxChars - this.formatTurn({ ...clean, text: '' }).length;
+    if (clean.text.length <= maxTextChars) return [clean];
 
-    const sentences = turn.text.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.map((text) => text.trim()) ?? [];
-    const chunks: string[] = [];
-    let current: string[] = [];
-    let currentWords = 0;
+    const sentences = clean.text.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.map((text) => text.trim()) ?? [];
+    const pieces: string[] = [];
+    let current = '';
     for (const sentence of sentences) {
-      const sentenceWords = sentence.split(/\s+/).filter(Boolean);
-      if (currentWords > 0 && currentWords + sentenceWords.length > maxWords) {
-        chunks.push(current.join(' '));
-        current = [];
-        currentWords = 0;
-      }
-      if (sentenceWords.length > maxWords) {
-        for (let offset = 0; offset < sentenceWords.length; offset += maxWords) {
-          if (current.length) {
-            chunks.push(current.join(' '));
-            current = [];
-            currentWords = 0;
-          }
-          chunks.push(sentenceWords.slice(offset, offset + maxWords).join(' '));
-        }
+      if (sentence.length > maxTextChars) {
+        if (current) pieces.push(current);
+        current = '';
+        pieces.push(...this.splitText(sentence, maxTextChars));
+      } else if (!current) {
+        current = sentence;
+      } else if (`${current} ${sentence}`.length <= maxTextChars) {
+        current = `${current} ${sentence}`;
       } else {
-        current.push(sentence);
-        currentWords += sentenceWords.length;
+        pieces.push(current);
+        current = sentence;
       }
     }
-    if (current.length) chunks.push(current.join(' '));
-    return chunks.filter(Boolean).map((text) => ({ speaker: turn.speaker, text }));
+    if (current) pieces.push(current);
+    return pieces.filter(Boolean).map((text) => ({ speaker: turn.speaker, text }));
   }
 
-  private validateWav(wav: Buffer, index: number) {
+  private splitText(text: string, maxChars: number): string[] {
+    const pieces: string[] = [];
+    let current = '';
+    for (const word of text.split(/\s+/).filter(Boolean)) {
+      if (word.length > maxChars) {
+        if (current) pieces.push(current);
+        current = '';
+        for (let offset = 0; offset < word.length; offset += maxChars) {
+          pieces.push(word.slice(offset, offset + maxChars));
+        }
+      } else if (!current) {
+        current = word;
+      } else if (`${current} ${word}`.length <= maxChars) {
+        current = `${current} ${word}`;
+      } else {
+        pieces.push(current);
+        current = word;
+      }
+    }
+    if (current) pieces.push(current);
+    return pieces;
+  }
+
+  private formatTurn(turn: PodcastTurn): string {
+    const tag = turn.speaker === 'HOST_A' ? 'SPEAKER0' : 'SPEAKER1';
+    return `[${tag}] ${turn.text.trim()}`;
+  }
+
+  private validateWav(wav: Buffer, label: string): WavFormat {
     if (
       wav.length < 44 ||
       wav.subarray(0, 4).toString('ascii') !== 'RIFF' ||
       wav.subarray(8, 12).toString('ascii') !== 'WAVE'
     ) {
-      throw new Error(`TTS returned an invalid WAV for segment ${index + 1}`);
+      throw new Error(`TTS returned an invalid WAV for ${label}`);
     }
+
+    let format: WavFormat | undefined;
+    let hasAudio = false;
+    for (let offset = 12; offset + 8 <= wav.length; ) {
+      const id = wav.subarray(offset, offset + 4).toString('ascii');
+      const size = wav.readUInt32LE(offset + 4);
+      const start = offset + 8;
+      const end = start + size;
+      if (end > wav.length) throw new Error(`TTS returned a truncated WAV for ${label}`);
+      if (id === 'fmt ' && size >= 16) {
+        format = {
+          audioFormat: wav.readUInt16LE(start),
+          channels: wav.readUInt16LE(start + 2),
+          sampleRate: wav.readUInt32LE(start + 4),
+          bitsPerSample: wav.readUInt16LE(start + 14),
+        };
+      }
+      if (id === 'data' && size > 0) hasAudio = true;
+      offset = end + (size % 2);
+    }
+
+    if (!format || !hasAudio) throw new Error(`TTS returned an empty or malformed WAV for ${label}`);
+    if (format.audioFormat !== 1 || format.bitsPerSample !== 16) {
+      throw new Error(`TTS returned unsupported WAV encoding for ${label}`);
+    }
+    if (format.channels < 1 || format.channels > 2 || format.sampleRate < 8000) {
+      throw new Error(`TTS returned unsupported WAV settings for ${label}`);
+    }
+    return format;
+  }
+
+  private assertCompatibleFormat(expected: WavFormat, actual: WavFormat, index: number) {
+    if (
+      expected.audioFormat !== actual.audioFormat ||
+      expected.channels !== actual.channels ||
+      expected.sampleRate !== actual.sampleRate ||
+      expected.bitsPerSample !== actual.bitsPerSample
+    ) {
+      throw new Error(`TTS returned incompatible WAV settings for chunk ${index + 1}`);
+    }
+  }
+
+  private channelLayout(channels: number): string {
+    if (channels === 1) return 'mono';
+    if (channels === 2) return 'stereo';
+    throw new Error(`Unsupported TTS channel count: ${channels}`);
   }
 
   private runFfmpeg(args: string[]): Promise<void> {
@@ -186,6 +296,11 @@ export class AudioProductionService {
           }
         }),
     );
+  }
+
+  private positiveNumber(value: string | undefined, fallback: number): number {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
   }
 
   private pad(index: number) {
