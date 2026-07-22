@@ -43,6 +43,7 @@ export function App() {
   const [myPodcasts, setMyPodcasts] = useState<PersonalPodcast[]>([]);
   const [myPodcastsLoading, setMyPodcastsLoading] = useState(false);
   const [managementData, setManagementData] = useState<PodcastManagementState | null>(null);
+  const [previewStopSignal, setPreviewStopSignal] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const currentTimeRef = useRef(0);
   const pendingSeekRef = useRef<number | null>(null);
@@ -192,6 +193,7 @@ export function App() {
   };
 
   const playClassEpisode = async (episode: PodcastEpisode) => {
+    setPreviewStopSignal((signal) => signal + 1);
     if (!podcastData) return;
     const initialItem = classEpisodeView(podcastData.podcast, episode);
     const key = podcastViewKey(initialItem);
@@ -209,6 +211,7 @@ export function App() {
   };
 
   const playPersonalPodcast = (podcast: PersonalPodcast) => {
+    setPreviewStopSignal((signal) => signal + 1);
     const item = personalPodcastView(podcast);
     if (podcast.status !== 'ready' || !podcast.audioUrl) return;
     const key = podcastViewKey(item);
@@ -223,6 +226,7 @@ export function App() {
 
   const toggleCurrentTrack = () => {
     if (!currentKey) return;
+    setPreviewStopSignal((signal) => signal + 1);
     setPlayingKey((current) => current === currentKey ? null : currentKey);
   };
 
@@ -383,6 +387,8 @@ export function App() {
               token={bridge.token.accessToken}
               onRefresh={refreshManagement}
               onPublished={() => setRefreshKey((key) => key + 1)}
+              onPreviewStart={() => setPlayingKey(null)}
+              previewStopSignal={previewStopSignal}
             />
           ) : null}
         </main>

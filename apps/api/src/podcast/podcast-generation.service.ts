@@ -136,7 +136,7 @@ export class PodcastGenerationService {
       lectureNumber: 0,
       documentName: job.documentId,
       materialType: 'document',
-      durationLabel: `${script.durationTargetMinutes} min`,
+      durationLabel: this.durationLabel(job.durationSeconds),
       script: script.turns.map((turn) => `${turn.speaker}: ${turn.text}`).join('\n\n'),
       status: job.status,
       audioUrl: job.audioUrl,
@@ -155,5 +155,11 @@ export class PodcastGenerationService {
       '',
     );
     return `${base}/api/podcast/audio/${encodeURIComponent(episodeId)}`;
+  }
+
+  private durationLabel(durationSeconds?: number): string {
+    if (!durationSeconds || !Number.isFinite(durationSeconds)) return 'Published';
+    const seconds = Math.max(0, Math.floor(durationSeconds));
+    return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
   }
 }

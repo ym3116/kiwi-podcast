@@ -80,7 +80,8 @@ describe('AudioProductionService', () => {
       synthesizeChunk: vi.fn(async () => silentWav()),
     };
     const service = new AudioProductionService(tts as never);
-    const mp3 = await service.produce(script(), progress);
+    const metadata = vi.fn();
+    const mp3 = await service.produce(script(), progress, undefined, metadata);
 
     expect(mp3.length).toBeGreaterThan(0);
     expect(tts.buildAnchor).toHaveBeenCalledTimes(2);
@@ -96,6 +97,8 @@ describe('AudioProductionService', () => {
       expect.objectContaining({ SPEAKER0: expect.any(String), SPEAKER1: expect.any(String) }),
     );
     expect(progress).toHaveBeenLastCalledWith({ completedChunks: 2, totalChunks: 2 });
+    expect(metadata).toHaveBeenCalledWith({ durationSeconds: expect.any(Number) });
+    expect(metadata.mock.calls[0][0].durationSeconds).toBeGreaterThan(0);
     expect(await readdir(root)).toEqual([]);
   });
 });

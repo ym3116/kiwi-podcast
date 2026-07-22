@@ -45,6 +45,7 @@ export interface PodcastJob {
   progressPercent?: number;
   statusMessage?: string;
   draftRevision?: number;
+  durationSeconds?: number;
   scriptPath?: string;
   audioStorageKey?: string;
   audioUrl?: string;

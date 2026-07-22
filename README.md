@@ -172,6 +172,14 @@ Professors can rename an episode, generate or manually edit a `host:` /
 an authenticated preview, and explicitly publish it. A new draft or preview
 does not replace the version currently available to students.
 
+Voice forms show preset selection only in Preset mode and description/seed only
+in Custom Prompt mode. A custom seed makes a generated custom voice repeatable:
+the same description and seed should produce a similar anchor, while changing
+the seed explores another voice variation. All management previews share one
+toggleable audio player, so starting one stops any other podcast or preview.
+Published class runtimes are measured from the final rendered master audio and
+displayed as `m:ss`; they are not estimated from a requested target length.
+
 Kiwi supplies the class, user, role, token scopes, and canonical document
 metadata. Until Kiwi exposes extracted document text to this app, automatic
 draft generation reads only chunk text and optional page numbers from:

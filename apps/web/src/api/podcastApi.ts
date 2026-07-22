@@ -116,7 +116,7 @@ export function updateManagedEpisode(
   token: string,
   input: {
     title?: string;
-    draft?: { summary?: string; durationTargetMinutes?: number; turns: Array<{ speaker: 'HOST_A' | 'HOST_B'; text: string }> };
+    draft?: { summary?: string; turns: Array<{ speaker: 'HOST_A' | 'HOST_B'; text: string }> };
     voiceOverrides?: EpisodeVoiceOverrides;
   },
 ) {

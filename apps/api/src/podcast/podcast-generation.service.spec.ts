@@ -69,6 +69,33 @@ describe('PodcastGenerationService', () => {
     expect(getChunks).not.toHaveBeenCalled();
     expect(store.statuses).toEqual([]);
   });
+
+  it('shows the measured render duration for a published episode', async () => {
+    const artifacts = {
+      readPublishedJob: vi.fn().mockResolvedValue({
+        id: 'job-1', episodeId: 'episode-doc-1', classId: 'class-1', documentId: 'doc-1',
+        status: 'ready', durationSeconds: 95, audioUrl: '/audio', updatedAt: '2026-07-22T00:00:00Z',
+      }),
+      titleOverride: vi.fn().mockResolvedValue(null),
+      readScriptForJob: vi.fn().mockResolvedValue({
+        title: 'Measured episode', summary: 'Summary', durationTargetMinutes: 20,
+        turns: [{ speaker: 'HOST_A', text: 'Welcome.' }],
+      }),
+    };
+    const service = new PodcastGenerationService(
+      {} as never,
+      artifacts as unknown as PodcastArtifactStore,
+      {} as never,
+      {} as never,
+    );
+
+    const episode = await service.overlayEpisode({
+      id: 'episode-doc-1', documentId: 'doc-1', title: 'Episode', lectureNumber: 1,
+      documentName: 'Lecture', materialType: 'lecture', durationLabel: 'Not published', script: '', status: 'placeholder',
+    });
+
+    expect(episode.durationLabel).toBe('1:35');
+  });
 });
 
 function inMemoryStore() {

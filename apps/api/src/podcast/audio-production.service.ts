@@ -13,11 +13,16 @@ export interface AudioProductionProgress {
   totalChunks: number;
 }
 
+export interface AudioProductionMetadata {
+  durationSeconds: number;
+}
+
 interface WavFormat {
   audioFormat: number;
   channels: number;
   sampleRate: number;
   bitsPerSample: number;
+  dataBytes: number;
 }
 
 @Injectable()
@@ -64,6 +69,7 @@ export class AudioProductionService {
     script: GeneratedPodcastScript,
     onProgress?: (progress: AudioProductionProgress) => void | Promise<void>,
     voiceSettings?: PodcastVoiceSettings,
+    onMetadata?: (metadata: AudioProductionMetadata) => void | Promise<void>,
   ): Promise<Buffer> {
     await mkdir(this.tempRoot, { recursive: true });
     await this.cleanupStaleWorkspaces();
@@ -155,6 +161,9 @@ export class AudioProductionService {
       ]);
       const mp3 = await readFile(mp3Path);
       if (mp3.length === 0) throw new Error('FFmpeg produced an empty MP3');
+      const masterFormat = this.validateWav(await readFile(masterPath), 'final podcast');
+      const bytesPerSecond = masterFormat.sampleRate * masterFormat.channels * (masterFormat.bitsPerSample / 8);
+      await onMetadata?.({ durationSeconds: masterFormat.dataBytes / bytesPerSecond });
       return mp3;
     } finally {
       await rm(workspace, { recursive: true, force: true });
@@ -226,6 +235,7 @@ export class AudioProductionService {
     }
 
     let format: WavFormat | undefined;
+    let dataBytes = 0;
     let hasAudio = false;
     for (let offset = 12; offset + 8 <= wav.length; ) {
       const id = wav.subarray(offset, offset + 4).toString('ascii');
@@ -239,13 +249,18 @@ export class AudioProductionService {
           channels: wav.readUInt16LE(start + 2),
           sampleRate: wav.readUInt32LE(start + 4),
           bitsPerSample: wav.readUInt16LE(start + 14),
+          dataBytes: 0,
         };
       }
-      if (id === 'data' && size > 0) hasAudio = true;
+      if (id === 'data' && size > 0) {
+        hasAudio = true;
+        dataBytes += size;
+      }
       offset = end + (size % 2);
     }
 
     if (!format || !hasAudio) throw new Error(`TTS returned an empty or malformed WAV for ${label}`);
+    format.dataBytes = dataBytes;
     if (format.audioFormat !== 1 || format.bitsPerSample !== 16) {
       throw new Error(`TTS returned unsupported WAV encoding for ${label}`);
     }

@@ -98,6 +98,7 @@ export interface ManagedRender {
   statusMessage: string;
   errorMessage?: string | null;
   draftRevision?: number | null;
+  durationSeconds?: number | null;
   generatedAt?: string | null;
   previewAvailable: boolean;
 }
@@ -109,13 +110,12 @@ export interface ManagedEpisode {
   title: string;
   draft: {
     summary: string;
-    durationTargetMinutes: number;
     turns: Array<{ speaker: 'HOST_A' | 'HOST_B'; text: string }>;
     revision: number;
   };
   voiceOverrides: EpisodeVoiceOverrides;
   effectiveVoices: PodcastVoiceSettings;
-  published: { jobId: string; generatedAt: string; audioUrl: string } | null;
+  published: { jobId: string; generatedAt: string; durationSeconds?: number | null; audioUrl: string } | null;
   latestRender: ManagedRender | null;
 }
 

@@ -331,6 +331,7 @@ export class PodcastArtifactStore {
       status: 'ready' | 'failed';
       errorMessage?: string;
       generatedAt?: string;
+      durationSeconds?: number;
     },
   ): Promise<PodcastJob> {
     const existing = await this.prisma.generationJob.findUnique({ where: { id: jobId } });
@@ -345,6 +346,7 @@ export class PodcastArtifactStore {
         finishedAt: new Date(),
         progressPercent: patch.status === 'ready' ? 100 : existing.progressPercent,
         statusMessage: patch.status === 'ready' ? 'Preview ready' : 'Generation stopped',
+        durationSeconds: patch.durationSeconds,
       },
       include: { audioAsset: true },
     });
@@ -422,6 +424,7 @@ export class PodcastArtifactStore {
       progressPercent: number;
       statusMessage: string;
       draftRevision: number | null;
+      durationSeconds: number | null;
       updatedAt: Date;
       finishedAt: Date | null;
       audioAsset?: { storageKey: string } | null;
@@ -436,6 +439,7 @@ export class PodcastArtifactStore {
       progressPercent: job.progressPercent,
       statusMessage: job.statusMessage,
       draftRevision: job.draftRevision ?? undefined,
+      durationSeconds: job.durationSeconds ?? undefined,
       audioStorageKey: job.audioAsset?.storageKey,
       audioUrl: job.status === 'ready' ? this.audioUrl(job.episodeId, job.id) : undefined,
       generatedAt: job.status === 'ready' ? job.finishedAt?.toISOString() : undefined,

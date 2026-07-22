@@ -97,6 +97,7 @@ model GenerationJob {
   statusMessage    String             @default("Waiting to start") @map("status_message")
   draftRevision    Int?               @map("draft_revision")
   settingsSnapshot Json?              @map("settings_snapshot")
+  durationSeconds  Float?             @map("duration_seconds")
   inputMetadata    Json?              @map("input_metadata")
   errorMessage     String?            @map("error_message")
   startedAt        DateTime           @default(now()) @map("started_at")

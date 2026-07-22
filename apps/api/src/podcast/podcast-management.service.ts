@@ -67,7 +67,6 @@ export class PodcastManagementService {
           title: episode.titleOverride || episode.title,
           draft: {
             summary: episode.draftSummary ?? '',
-            durationTargetMinutes: episode.draftDurationTargetMinutes ?? 10,
             turns: this.parseTurns(episode.draftTurns),
             revision: episode.draftRevision,
           },
@@ -76,6 +75,7 @@ export class PodcastManagementService {
           published: episode.publishedJob ? {
             jobId: episode.publishedJob.id,
             generatedAt: episode.publishedJob.finishedAt?.toISOString() ?? episode.publishedJob.updatedAt.toISOString(),
+            durationSeconds: episode.publishedJob.durationSeconds,
             audioUrl: `${this.publicBase}/api/podcast/audio/${encodeURIComponent(episode.episodeId)}?v=${episode.publishedJob.id}`,
           } : null,
           latestRender: latest ? this.jobResponse(latest) : null,
@@ -125,10 +125,12 @@ export class PodcastManagementService {
       const turns = this.validateTurns(input.draft.turns);
       data.draftTurns = turns as unknown as Prisma.InputJsonValue;
       data.draftSummary = input.draft.summary?.trim() || '';
-      data.draftDurationTargetMinutes = this.duration(input.draft.durationTargetMinutes);
       invalidatesRender ||= !this.sameJson(turns, this.parseTurns(episode.draftTurns))
-        || data.draftSummary !== (episode.draftSummary ?? '')
-        || data.draftDurationTargetMinutes !== (episode.draftDurationTargetMinutes ?? 10);
+        || data.draftSummary !== (episode.draftSummary ?? '');
+      if (input.draft.durationTargetMinutes !== undefined) {
+        data.draftDurationTargetMinutes = this.duration(input.draft.durationTargetMinutes);
+        invalidatesRender ||= data.draftDurationTargetMinutes !== (episode.draftDurationTargetMinutes ?? 10);
+      }
     }
     if (input.voiceOverrides !== undefined) {
       const overrides = this.validateOverrides(input.voiceOverrides);
@@ -265,13 +267,16 @@ export class PodcastManagementService {
     settings: PodcastVoiceSettings,
   ) {
     try {
+      let durationSeconds: number | undefined;
       await this.artifacts.updateJobProgress(jobId, 12, 'Saving script snapshot');
       await this.artifacts.writeScript(episodeId, script, jobId);
       await this.artifacts.updateJobProgress(jobId, 22, 'Building speaker voices');
       const audio = await this.audioProduction.produce(script, async ({ completedChunks, totalChunks }) => {
         const progress = 25 + Math.round((completedChunks / totalChunks) * 65);
         await this.artifacts.updateJobProgress(jobId, progress, `Generating audio — chunk ${completedChunks} of ${totalChunks}`);
-      }, settings);
+      }, settings, (metadata) => {
+        durationSeconds = metadata.durationSeconds;
+      });
       await this.artifacts.updateJobProgress(jobId, 94, 'Saving preview audio');
       await this.artifacts.writeAudio(episodeId, audio, jobId);
       await this.artifacts.finishJob(jobId, episodeId, {
@@ -279,6 +284,7 @@ export class PodcastManagementService {
         documentId,
         status: 'ready',
         generatedAt: new Date().toISOString(),
+        durationSeconds,
       });
     } catch (error) {
       await this.artifacts.finishJob(jobId, episodeId, {
@@ -380,6 +386,7 @@ export class PodcastManagementService {
     statusMessage: string;
     errorMessage: string | null;
     draftRevision: number | null;
+    durationSeconds: number | null;
     finishedAt: Date | null;
     updatedAt: Date;
     audioAsset: { storageKey: string } | null;
@@ -391,6 +398,7 @@ export class PodcastManagementService {
       statusMessage: job.statusMessage,
       errorMessage: job.errorMessage,
       draftRevision: job.draftRevision,
+      durationSeconds: job.durationSeconds,
       generatedAt: job.finishedAt?.toISOString() ?? null,
       previewAvailable: Boolean(job.audioAsset),
     };
