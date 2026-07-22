@@ -71,10 +71,7 @@ describe('TtsService', () => {
       temperature: 0.5,
     });
     expect(Object.keys(instructions.speakers)).toEqual(['SPEAKER0', 'SPEAKER1']);
-    expect(instructions.ref_texts).toEqual({
-      SPEAKER0: expect.any(String),
-      SPEAKER1: expect.any(String),
-    });
+    expect(instructions).not.toHaveProperty('ref_texts');
     expect(instructions.system_prompt).toContain('SPEAKER0:');
     expect(instructions.system_prompt).toContain('SPEAKER1:');
   });

@@ -82,10 +82,7 @@ describe('App', () => {
     await user.click(screen.getByText('Lecture 14 - Regularization 2'));
 
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Lecture 14 - Regularization 2' })).toBeInTheDocument());
-    const generate = screen.getByRole('button', { name: 'Generate audio' });
-    expect(generate).toBeDefined();
-    if (!generate) return;
-    await user.click(generate);
+    await user.click(screen.getByRole('button', { name: 'Play' }));
     expect(screen.getAllByRole('button', { name: 'Pause' }).length).toBeGreaterThan(0);
   });
 
@@ -96,10 +93,7 @@ describe('App', () => {
     await screen.findByText('Lecture 14 - Regularization 2');
     await user.click(screen.getByText('Lecture 14 - Regularization 2'));
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Lecture 14 - Regularization 2' })).toBeInTheDocument());
-    const generate = screen.getByRole('button', { name: 'Generate audio' });
-    expect(generate).toBeDefined();
-    if (!generate) return;
-    await user.click(generate);
+    await user.click(screen.getByRole('button', { name: 'Play' }));
 
     await user.click(screen.getByRole('button', { name: 'Back to Class Podcast' }));
 
@@ -133,10 +127,7 @@ describe('App', () => {
     await waitFor(() =>
       expect(screen.getByRole('heading', { name: 'Lecture 14 - Regularization 2' })).toBeInTheDocument(),
     );
-    const generate = screen.getByRole('button', { name: 'Generate audio' });
-    expect(generate).toBeDefined();
-    if (!generate) return;
-    await user.click(generate);
+    await user.click(screen.getByRole('button', { name: 'Play' }));
 
     const audio = container.querySelector('audio');
     expect(audio).toBeTruthy();

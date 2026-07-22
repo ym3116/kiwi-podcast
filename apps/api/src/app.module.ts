@@ -12,10 +12,13 @@ import { TtsService } from './podcast/tts.service';
 import { PersonalPodcastService } from './podcast/personal-podcast.service';
 import { AudioProductionService } from './podcast/audio-production.service';
 import { AUDIO_S3_CLIENT, AudioStorageService, createAudioS3Client } from './storage/audio-storage.service';
+import { PodcastManagementController } from './podcast/podcast-management.controller';
+import { PodcastManagementService } from './podcast/podcast-management.service';
+import { PodcastManagementAuthService } from './podcast/podcast-management-auth.service';
 
 @Module({
   imports: [DatabaseModule],
-  controllers: [HealthController, PodcastController],
+  controllers: [HealthController, PodcastController, PodcastManagementController],
   providers: [
     KiwiMcpClient,
     LocalDemoChunkSource,
@@ -26,6 +29,8 @@ import { AUDIO_S3_CLIENT, AudioStorageService, createAudioS3Client } from './sto
     TtsService,
     PersonalPodcastService,
     AudioProductionService,
+    PodcastManagementService,
+    PodcastManagementAuthService,
     AudioStorageService,
     { provide: AUDIO_S3_CLIENT, useFactory: createAudioS3Client },
   ],

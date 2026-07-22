@@ -38,9 +38,10 @@ export const simulatorPodcast: PodcastResponse = {
       documentName: '14_regularization_2',
       materialType: 'class materials',
       durationLabel: '15 min',
-      status: 'placeholder',
+      status: 'ready',
+      audioUrl: 'https://filesamples.com/samples/audio/mp3/sample3.mp3',
       script:
-        'Generate this episode to create a podcast from the local demo chunks for regularization and Lasso regression.',
+        'HOST_A: Welcome to this published simulator episode about regularization.\n\nHOST_B: Let’s compare Lasso and ridge regression.',
     },
     {
       id: 'episode-sim-2',

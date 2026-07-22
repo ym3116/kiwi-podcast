@@ -79,13 +79,27 @@ export class PodcastGenerationService {
   }
 
   async overlayEpisode(episode: PodcastEpisode): Promise<PodcastEpisode> {
-    const job = await this.artifacts.readJob(episode.id);
-    if (!job) return episode;
+    const [job, titleOverride] = await Promise.all([
+      this.artifacts.readPublishedJob(episode.id),
+      this.artifacts.titleOverride(episode.id),
+    ]);
+    if (!job) {
+      return {
+        ...episode,
+        title: titleOverride || episode.title,
+        status: 'placeholder',
+        script: '',
+        audioUrl: undefined,
+        generatedAt: undefined,
+        errorMessage: undefined,
+      };
+    }
 
     const generated = await this.episodeFromJob(job);
     if (!generated) {
       return {
         ...episode,
+        title: titleOverride || episode.title,
         status: job.status,
         audioUrl: job.audioUrl,
         generatedAt: job.generatedAt,
@@ -95,7 +109,7 @@ export class PodcastGenerationService {
 
     return {
       ...episode,
-      title: generated.title,
+      title: titleOverride || generated.title,
       durationLabel: generated.durationLabel,
       script: generated.script,
       status: generated.status,
@@ -110,7 +124,9 @@ export class PodcastGenerationService {
   }
 
   private async episodeFromJob(job: PodcastJob): Promise<PodcastEpisode | undefined> {
-    const script = await this.artifacts.readScript(job.episodeId);
+    const script = job.id
+      ? await this.artifacts.readScriptForJob(job.id)
+      : await this.artifacts.readScript(job.episodeId);
     if (!script) return undefined;
 
     return {

@@ -13,6 +13,7 @@
 # Usage:
 #     KIWI=http://localhost:3000 \
 #     ADMIN_TOKEN=eyJ... \
+#     KIWI_COOKIE='connect.sid=s%3A...' \
 #     APP_URL=http://localhost:8000 \
 #     CLASS_ID=<classId> \
 #     ./register.sh
@@ -27,9 +28,15 @@ SLUG="${SLUG:-kiwi-podcast}"                    # app id (must match the app's a
 SECRET="${SECRET:-kiwi-podcast-local-dev-secret-0001}" # plaintext registration secret
 APP_URL="${APP_URL:-http://localhost:8000}"     # where YOU serve the Vite web app
 ADMIN_TOKEN="${ADMIN_TOKEN:-}"                  # admin JWT (for whitelist + enable)
+KIWI_COOKIE="${KIWI_COOKIE:-}"                  # browser session cookie, e.g. connect.sid=s%3A...
 CLASS_ID="${CLASS_ID:-}"                         # optional: enable the app in this class
 
-SCOPES='["user:profile:read","class:info:read","class:enrollments:read"]'
+SCOPES='["user:profile:read","class:info:read","class:enrollments:read","podcast:manage"]'
+
+COOKIE_ARGS=()
+if [ -n "$KIWI_COOKIE" ]; then
+  COOKIE_ARGS=(-H "Cookie: $KIWI_COOKIE")
+fi
 
 say()  { printf '\n\033[1;32m▸ %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33m! %s\033[0m\n' "$*"; }
@@ -44,6 +51,7 @@ if [ -z "$ADMIN_TOKEN" ]; then
 else
   curl -sS -X POST "$KIWI/api/kiwi-apps/whitelist" \
     -H "Authorization: Bearer $ADMIN_TOKEN" \
+    "${COOKIE_ARGS[@]}" \
     -H "Content-Type: application/json" \
     -d "{
       \"slug\": \"$SLUG\",
@@ -52,7 +60,20 @@ else
       \"status\": \"approved\",
       \"description\": \"Kiwi Podcast external app\",
       \"maxScopes\": $SCOPES
-    }" | pp || warn "whitelist call failed (it may already exist — that's fine)"
+    }" | pp || warn "whitelist create call failed (it may already exist — continuing with update)"
+
+  say "1/3  Ensure '$SLUG' whitelist scopes — PATCH /api/kiwi-apps/whitelist/$SLUG"
+  curl -sS -X PATCH "$KIWI/api/kiwi-apps/whitelist/$SLUG" \
+    -H "Authorization: Bearer $ADMIN_TOKEN" \
+    "${COOKIE_ARGS[@]}" \
+    -H "Content-Type: application/json" \
+    -d "{
+      \"baseUrl\": \"$APP_URL\",
+      \"registrationSecret\": \"$SECRET\",
+      \"status\": \"approved\",
+      \"description\": \"Kiwi Podcast external app\",
+      \"maxScopes\": $SCOPES
+    }" | pp || warn "whitelist update failed"
 fi
 
 # -----------------------------------------------------------------------------
@@ -95,12 +116,24 @@ elif [ -z "$APP_ID" ]; then
 else
   curl -sS -X POST "$KIWI/api/classes/$CLASS_ID/apps" \
     -H "Authorization: Bearer $ADMIN_TOKEN" \
+    "${COOKIE_ARGS[@]}" \
     -H "Content-Type: application/json" \
     -d "{
       \"appId\": \"$APP_ID\",
       \"tabLabel\": \"Podcast\",
       \"enabledScopes\": $SCOPES
-    }" | pp || warn "enable call failed"
+    }" | pp || warn "enable create call failed (it may already exist — continuing with update)"
+
+  say "3/3  Ensure class scopes — PATCH /api/classes/$CLASS_ID/apps/$APP_ID"
+  curl -sS -X PATCH "$KIWI/api/classes/$CLASS_ID/apps/$APP_ID" \
+    -H "Authorization: Bearer $ADMIN_TOKEN" \
+    "${COOKIE_ARGS[@]}" \
+    -H "Content-Type: application/json" \
+    -d "{
+      \"tabLabel\": \"Podcast\",
+      \"isEnabled\": true,
+      \"enabledScopes\": $SCOPES
+    }" | pp || warn "class app scope update failed"
 fi
 
 say "Done."

@@ -16,6 +16,51 @@ export class KiwiMcpClient {
   );
 
   async readResource(accessToken: string, uri: string): Promise<unknown> {
+    return this.withSession(accessToken, async (post, rpcId) => {
+      const resource = await post({
+        jsonrpc: '2.0',
+        id: rpcId,
+        method: 'resources/read',
+        params: { uri },
+      });
+
+      if (resource?.error) {
+        throw new Error(resource.error.message || `Kiwi MCP resource read failed for ${uri}`);
+      }
+
+      return this.extractResourceJson(resource?.result);
+    });
+  }
+
+  async callTool(accessToken: string, name: string, args: Record<string, unknown> = {}): Promise<unknown> {
+    return this.withSession(accessToken, async (post, rpcId) => {
+      const response = await post({
+        jsonrpc: '2.0',
+        id: rpcId,
+        method: 'tools/call',
+        params: { name, arguments: args },
+      });
+      if (response?.error) throw new Error(response.error.message || `Kiwi MCP tool ${name} failed`);
+      return this.extractToolJson(response?.result);
+    });
+  }
+
+  async getClassRole(userId: string, classId: string): Promise<string | null> {
+    const response = await fetch(
+      `${this.kiwiApiBase}/api/permissions/class-role?userId=${encodeURIComponent(userId)}&classId=${encodeURIComponent(classId)}`,
+    );
+    const body = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(body?.error || `Kiwi permissions returned ${response.status}`);
+    return typeof body?.role === 'string' ? body.role : null;
+  }
+
+  private async withSession<T>(
+    accessToken: string,
+    operation: (
+      post: (payload: Record<string, unknown>) => Promise<JsonRpcResponse | null>,
+      rpcId: number,
+    ) => Promise<T>,
+  ): Promise<T> {
     let rpcId = 1;
     let sessionId: string | null = null;
 
@@ -63,18 +108,7 @@ export class KiwiMcpClient {
       params: {},
     });
 
-    const resource = await post({
-      jsonrpc: '2.0',
-      id: rpcId,
-      method: 'resources/read',
-      params: { uri },
-    });
-
-    if (resource?.error) {
-      throw new Error(resource.error.message || `Kiwi MCP resource read failed for ${uri}`);
-    }
-
-    return this.extractResourceJson(resource?.result);
+    return operation(post, rpcId);
   }
 
   private async parseResponse(response: Response): Promise<unknown> {
@@ -104,6 +138,18 @@ export class KiwiMcpClient {
     const text = contents?.[0]?.text;
     if (!text) return result;
     return JSON.parse(text);
+  }
+
+  private extractToolJson(result: unknown): unknown {
+    const tool = result as { isError?: boolean; content?: Array<{ text?: string }> } | undefined;
+    const text = tool?.content?.[0]?.text;
+    if (tool?.isError) throw new Error(text || 'Kiwi MCP tool failed');
+    if (!text) return result;
+    try {
+      return JSON.parse(text);
+    } catch {
+      return text;
+    }
   }
 
   private errorMessage(body: unknown): string | null {

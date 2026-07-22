@@ -26,6 +26,22 @@ export class PodcastArtifactStore {
     return job ? this.toPodcastJob(job) : null;
   }
 
+  async readJobById(jobId: string): Promise<PodcastJob | null> {
+    const job = await this.prisma.generationJob.findUnique({
+      where: { id: jobId },
+      include: { audioAsset: true },
+    });
+    return job ? this.toPodcastJob(job) : null;
+  }
+
+  async readPublishedJob(episodeId: string): Promise<PodcastJob | null> {
+    const episode = await this.prisma.podcastEpisode.findUnique({
+      where: { episodeId },
+      include: { publishedJob: { include: { audioAsset: true } } },
+    });
+    return episode?.publishedJob ? this.toPodcastJob(episode.publishedJob) : null;
+  }
+
   async writeJob(job: PodcastJob): Promise<PodcastJob> {
     await this.markJob(job.episodeId, job);
     return job;
@@ -37,6 +53,8 @@ export class PodcastArtifactStore {
       classId: string;
       documentId: string;
       inputMetadata?: Prisma.InputJsonValue;
+      draftRevision?: number;
+      settingsSnapshot?: Prisma.InputJsonValue;
     },
   ): Promise<{ job: PodcastJob; started: boolean }> {
     const active = await this.prisma.generationJob.findFirst({
@@ -55,6 +73,10 @@ export class PodcastArtifactStore {
           kiwiDocumentId: patch.documentId,
           status: 'generating',
           inputMetadata: patch.inputMetadata,
+          draftRevision: patch.draftRevision,
+          settingsSnapshot: patch.settingsSnapshot,
+          progressPercent: 5,
+          statusMessage: 'Waiting to start',
         },
         include: { audioAsset: true },
       });
@@ -103,6 +125,13 @@ export class PodcastArtifactStore {
             status: this.toPrismaStatus(patch.status),
             errorMessage: patch.errorMessage,
             finishedAt,
+            progressPercent: patch.status === 'ready' ? 100 : undefined,
+            statusMessage:
+              patch.status === 'ready'
+                ? 'Preview ready'
+                : patch.status === 'failed'
+                  ? 'Generation stopped'
+                  : undefined,
           },
           include: { audioAsset: true },
         })
@@ -129,22 +158,27 @@ export class PodcastArtifactStore {
     return this.toPodcastJob(job);
   }
 
+  async updateJobProgress(
+    jobId: string,
+    progressPercent: number,
+    statusMessage: string,
+  ): Promise<void> {
+    await this.prisma.generationJob.update({
+      where: { id: jobId },
+      data: { progressPercent, statusMessage },
+    });
+  }
+
   async writeScript(
     episodeId: string,
     script: GeneratedPodcastScript,
+    jobId?: string,
   ): Promise<{ scriptPath: string }> {
-    const job = await this.activeJob(episodeId);
-    await this.prisma.podcastScript.upsert({
-      where: { jobId: job.id },
-      create: {
+    const job = await this.renderJob(episodeId, jobId);
+    await this.prisma.podcastScript.create({
+      data: {
         episodeId,
         jobId: job.id,
-        title: script.title,
-        summary: script.summary,
-        durationTargetMinutes: script.durationTargetMinutes,
-        turns: script.turns as unknown as Prisma.InputJsonValue,
-      },
-      update: {
         title: script.title,
         summary: script.summary,
         durationTargetMinutes: script.durationTargetMinutes,
@@ -169,23 +203,28 @@ export class PodcastArtifactStore {
     };
   }
 
-  async writeAudio(episodeId: string, audio: Buffer): Promise<{ storageKey: string }> {
-    const storageKey = `class-episodes/${this.safeId(episodeId)}.mp3`;
-    const job = await this.activeJob(episodeId);
+  async readScriptForJob(jobId: string): Promise<GeneratedPodcastScript | null> {
+    const script = await this.prisma.podcastScript.findUnique({ where: { jobId } });
+    if (!script) return null;
+    return {
+      title: script.title,
+      summary: script.summary,
+      durationTargetMinutes: script.durationTargetMinutes,
+      turns: script.turns as unknown as GeneratedPodcastScript['turns'],
+    };
+  }
+
+  async writeAudio(episodeId: string, audio: Buffer, jobId?: string): Promise<{ storageKey: string }> {
+    const job = await this.renderJob(episodeId, jobId);
+    const storageKey = `class-episodes/${this.safeId(episodeId)}/${job.id}.mp3`;
     await this.audioStorage.upload(storageKey, audio);
     try {
-      await this.prisma.podcastAudioAsset.upsert({
-        where: { jobId: job.id },
-        create: {
+      await this.prisma.podcastAudioAsset.create({
+        data: {
           episodeId,
           jobId: job.id,
           storageKey,
           mimeType: 'audio/mpeg',
-          byteSize: audio.byteLength,
-          checksum: createHash('sha256').update(audio).digest('hex'),
-        },
-        update: {
-          storageKey,
           byteSize: audio.byteLength,
           checksum: createHash('sha256').update(audio).digest('hex'),
         },
@@ -260,18 +299,77 @@ export class PodcastArtifactStore {
   }
 
   async audioStorageKey(episodeId: string): Promise<string | null> {
-    const asset = await this.prisma.podcastAudioAsset.findFirst({
+    const episode = await this.prisma.podcastEpisode.findUnique({
       where: { episodeId },
-      orderBy: { createdAt: 'desc' },
+      select: { publishedJob: { select: { audioAsset: { select: { storageKey: true } } } } },
+    });
+    return episode?.publishedJob?.audioAsset?.storageKey ?? null;
+  }
+
+  async jobAudioStorageKey(jobId: string): Promise<string | null> {
+    const asset = await this.prisma.podcastAudioAsset.findUnique({
+      where: { jobId },
       select: { storageKey: true },
     });
     return asset?.storageKey ?? null;
+  }
+
+  async titleOverride(episodeId: string): Promise<string | null> {
+    const episode = await this.prisma.podcastEpisode.findUnique({
+      where: { episodeId },
+      select: { titleOverride: true },
+    });
+    return episode?.titleOverride ?? null;
+  }
+
+  async finishJob(
+    jobId: string,
+    episodeId: string,
+    patch: {
+      classId: string;
+      documentId: string;
+      status: 'ready' | 'failed';
+      errorMessage?: string;
+      generatedAt?: string;
+    },
+  ): Promise<PodcastJob> {
+    const existing = await this.prisma.generationJob.findUnique({ where: { id: jobId } });
+    if (!existing || existing.episodeId !== episodeId || existing.status !== 'generating') {
+      throw new Error('Render job is no longer active');
+    }
+    const job = await this.prisma.generationJob.update({
+      where: { id: jobId },
+      data: {
+        status: patch.status,
+        errorMessage: patch.errorMessage,
+        finishedAt: new Date(),
+        progressPercent: patch.status === 'ready' ? 100 : existing.progressPercent,
+        statusMessage: patch.status === 'ready' ? 'Preview ready' : 'Generation stopped',
+      },
+      include: { audioAsset: true },
+    });
+    await this.prisma.podcastEpisode.update({
+      where: { episodeId },
+      data: {
+        status: patch.status,
+        generatedAt: patch.generatedAt ? new Date(patch.generatedAt) : undefined,
+        errorMessage: patch.errorMessage ?? null,
+      },
+    });
+    return this.toPodcastJob(job);
   }
 
   private async activeJob(episodeId: string) {
     return this.prisma.generationJob.findFirstOrThrow({
       where: { episodeId, status: 'generating' },
       orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  private async renderJob(episodeId: string, jobId?: string) {
+    if (!jobId) return this.activeJob(episodeId);
+    return this.prisma.generationJob.findFirstOrThrow({
+      where: { id: jobId, episodeId, status: 'generating' },
     });
   }
 
@@ -315,23 +413,31 @@ export class PodcastArtifactStore {
 
   private toPodcastJob(
     job: {
+      id: string;
       episodeId: string;
       classId: string;
       kiwiDocumentId: string;
       status: PrismaPodcastJobStatus;
       errorMessage: string | null;
+      progressPercent: number;
+      statusMessage: string;
+      draftRevision: number | null;
       updatedAt: Date;
       finishedAt: Date | null;
       audioAsset?: { storageKey: string } | null;
     },
   ): PodcastJob {
     return {
+      id: job.id,
       episodeId: job.episodeId,
       classId: job.classId,
       documentId: job.kiwiDocumentId,
       status: job.status,
+      progressPercent: job.progressPercent,
+      statusMessage: job.statusMessage,
+      draftRevision: job.draftRevision ?? undefined,
       audioStorageKey: job.audioAsset?.storageKey,
-      audioUrl: job.status === 'ready' ? this.audioUrl(job.episodeId) : undefined,
+      audioUrl: job.status === 'ready' ? this.audioUrl(job.episodeId, job.id) : undefined,
       generatedAt: job.status === 'ready' ? job.finishedAt?.toISOString() : undefined,
       updatedAt: job.updatedAt.toISOString(),
       errorMessage: job.errorMessage ?? undefined,
@@ -342,12 +448,13 @@ export class PodcastArtifactStore {
     return status;
   }
 
-  private audioUrl(episodeId: string): string {
+  private audioUrl(episodeId: string, jobId?: string): string {
     const base = (process.env.PODCAST_PUBLIC_API_BASE ?? 'http://localhost:8010').replace(
       /\/$/,
       '',
     );
-    return `${base}/api/podcast/audio/${encodeURIComponent(episodeId)}`;
+    const suffix = jobId ? `?v=${encodeURIComponent(jobId)}` : '';
+    return `${base}/api/podcast/audio/${encodeURIComponent(episodeId)}${suffix}`;
   }
 
   private isUniqueConstraint(error: unknown): boolean {

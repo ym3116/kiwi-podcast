@@ -10,7 +10,6 @@ interface PodcastOverviewProps {
   onPlayAll: () => void;
   onPlayEpisode: (episode: PodcastEpisode) => void | Promise<void>;
   onRefresh: () => void;
-  generatingId: string | null;
   onCreate: () => void;
 }
 
@@ -21,7 +20,6 @@ export function PodcastOverview({
   onPlayAll,
   onPlayEpisode,
   onRefresh,
-  generatingId,
   onCreate,
 }: PodcastOverviewProps) {
   return (
@@ -37,7 +35,7 @@ export function PodcastOverview({
         <button className="primary-button create-button" type="button" onClick={onCreate}>
           <Sparkles size={18} /> Create your podcast
         </button>
-        <button className="primary-button" type="button" onClick={onPlayAll} disabled={data.episodes.length === 0}>
+        <button className="primary-button" type="button" onClick={onPlayAll} disabled={!data.episodes.some((episode) => episode.status === 'ready' && episode.audioUrl)}>
           <Play size={18} fill="currentColor" /> Play All
         </button>
         <button className="icon-button label-button" type="button" onClick={onRefresh}>
@@ -65,7 +63,8 @@ export function PodcastOverview({
                 <PodcastListRow
                   key={episode.id}
                   item={item}
-                  isBusy={generatingId === episode.id}
+                  isBusy={false}
+                  canPlay={episode.status === 'ready' && Boolean(episode.audioUrl)}
                   isPlaying={playingKey === podcastViewKey(item)}
                   onOpen={() => onSelectEpisode(episode)}
                   onPlay={() => void onPlayEpisode(episode)}

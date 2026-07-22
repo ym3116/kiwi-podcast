@@ -4,7 +4,11 @@ import path from 'node:path';
 import { PodcastChunkInput } from './podcast-generation.types';
 
 export interface PodcastChunkSource {
-  getChunks(classId: string, documentId: string): Promise<PodcastChunkInput>;
+  getChunks(
+    classId: string,
+    documentId: string,
+    canonical?: { documentName: string },
+  ): Promise<PodcastChunkInput>;
 }
 
 export interface DemoMaterial {
@@ -23,8 +27,18 @@ export class LocalDemoChunkSource implements PodcastChunkSource {
   private readonly chunkDir =
     process.env.PODCAST_DEMO_CHUNKS_DIR ?? path.resolve(__dirname, '../../demo-chunks');
 
-  async getChunks(classId: string, documentId: string): Promise<PodcastChunkInput> {
-    const payload = await this.readChunkFile(documentId);
+  async getChunks(
+    classId: string,
+    documentId: string,
+    canonical?: { documentName: string },
+  ): Promise<PodcastChunkInput> {
+    const payload = await this.readChunkFile(documentId, Boolean(canonical));
+    if (canonical && payload.documentId && payload.documentId !== documentId) {
+      throw new Error(`Local chunk documentId ${payload.documentId} does not match Kiwi document ${documentId}`);
+    }
+    if (canonical && payload.classId && payload.classId !== classId) {
+      throw new Error(`Local chunk classId ${payload.classId} does not match Kiwi class ${classId}`);
+    }
     const rawChunks = Array.isArray(payload.chunks) ? payload.chunks : [];
     const chunks = rawChunks
       .map((chunk) => ({
@@ -38,9 +52,9 @@ export class LocalDemoChunkSource implements PodcastChunkSource {
     }
 
     return {
-      classId: payload.classId || classId,
-      documentId: payload.documentId || documentId,
-      documentName: payload.documentName || documentId,
+      classId: canonical ? classId : payload.classId || classId,
+      documentId: canonical ? documentId : payload.documentId || documentId,
+      documentName: canonical?.documentName || payload.documentName || documentId,
       chunks,
     };
   }
@@ -110,7 +124,7 @@ export class LocalDemoChunkSource implements PodcastChunkSource {
     };
   }
 
-  private async readChunkFile(documentId: string): Promise<LocalChunkFile> {
+  private async readChunkFile(documentId: string, realKiwiDocument = false): Promise<LocalChunkFile> {
     const fileName = `${this.safeDocumentId(documentId)}.json`;
     const filePath = path.join(this.chunkDir, fileName);
 
@@ -118,6 +132,7 @@ export class LocalDemoChunkSource implements PodcastChunkSource {
       return JSON.parse(await readFile(filePath, 'utf8')) as LocalChunkFile;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        if (realKiwiDocument) throw new Error(`Local chunks are not available for Kiwi document ${documentId}`);
         throw new Error(`Demo chunk file not found for document ${documentId}: ${filePath}`);
       }
       throw error;

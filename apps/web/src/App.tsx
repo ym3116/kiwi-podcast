@@ -1,6 +1,6 @@
 import { AlertCircle, Headphones, Loader2, Radio } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { deleteMyPodcast, fetchClassPodcast, fetchMyPodcasts, generatePodcastEpisode, retryMyPodcast } from './api/podcastApi';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { deleteMyPodcast, fetchClassPodcast, fetchMyPodcasts, fetchPodcastManagement, retryMyPodcast } from './api/podcastApi';
 import { simulatorPodcast } from './bridge/simulator';
 import { useKiwiBridge } from './bridge/useKiwiBridge';
 import { MyPodcasts } from './components/MyPodcasts';
@@ -8,13 +8,14 @@ import { PlayerBar } from './components/PlayerBar';
 import { PodcastCreator } from './components/PodcastCreator';
 import { PodcastDetail } from './components/PodcastDetail';
 import { PodcastOverview } from './components/PodcastOverview';
-import { PersonalPodcast, PodcastEpisode, PodcastResponse } from './types/podcast';
+import { PodcastManager } from './components/PodcastManager';
+import { PersonalPodcast, PodcastEpisode, PodcastManagementState, PodcastResponse } from './types/podcast';
 import { classEpisodeView, personalPodcastView, PodcastSource, PodcastViewItem, podcastViewKey } from './types/podcastView';
 import { durationLabelToSeconds, formatDuration } from './utils/audioTime';
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 type MainView = 'home' | 'creator';
-type PodcastTab = 'class' | 'mine';
+type PodcastTab = 'class' | 'mine' | 'manage';
 type DetailTarget = { source: PodcastSource; id: string };
 const playbackRates = [1, 1.25, 1.5, 2];
 
@@ -36,12 +37,12 @@ export function App() {
   const [audioDuration, setAudioDuration] = useState<number | null>(null);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [generatingId, setGeneratingId] = useState<string | null>(null);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [mainView, setMainView] = useState<MainView>('home');
   const [podcastTab, setPodcastTab] = useState<PodcastTab>('class');
   const [myPodcasts, setMyPodcasts] = useState<PersonalPodcast[]>([]);
   const [myPodcastsLoading, setMyPodcastsLoading] = useState(false);
+  const [managementData, setManagementData] = useState<PodcastManagementState | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const currentTimeRef = useRef(0);
   const pendingSeekRef = useRef<number | null>(null);
@@ -71,6 +72,24 @@ export function App() {
     }
     void loadPodcast();
   }, [bridge.context, bridge.mode, bridge.token, refreshKey]);
+
+  const refreshManagement = useCallback(async () => {
+    if (bridge.mode !== 'live' || !bridge.context?.classId || !bridge.token?.accessToken) {
+      setManagementData(null);
+      return;
+    }
+    try {
+      setManagementData(await fetchPodcastManagement(bridge.context.classId, bridge.token.accessToken));
+    } catch (error) {
+      setManagementData(null);
+      setGenerationError(error instanceof Error ? error.message : 'Unable to load podcast management.');
+    }
+  }, [bridge.context?.classId, bridge.mode, bridge.token?.accessToken]);
+
+  useEffect(() => { void refreshManagement(); }, [refreshManagement]);
+  useEffect(() => {
+    if (!managementData && podcastTab === 'manage') setPodcastTab('class');
+  }, [managementData, podcastTab]);
 
   const refreshMyPodcasts = async () => {
     if (!bridge.context?.userId || !bridge.token?.accessToken) return;
@@ -158,35 +177,6 @@ export function App() {
     }
   }, [currentKey, currentTrack?.audioUrl, playbackRate, playingKey]);
 
-  const updateEpisode = (episode: PodcastEpisode) => {
-    setPodcastData((current) => current ? {
-      ...current,
-      episodes: current.episodes.map((item) => item.id === episode.id ? { ...item, ...episode } : item),
-    } : current);
-  };
-
-  const ensureGeneratedEpisode = async (episode: PodcastEpisode): Promise<PodcastEpisode> => {
-    if (episode.status === 'ready' && episode.audioUrl) return episode;
-    if (!bridge.context || !bridge.token?.accessToken) throw new Error('Podcast generation needs Kiwi context and an app token.');
-    setGeneratingId(episode.id);
-    setGenerationError(null);
-    try {
-      const result = await generatePodcastEpisode(bridge.context.classId, episode.documentId, bridge.token.accessToken);
-      const nextEpisode = result.episode ?? ({
-        ...episode,
-        status: result.job.status,
-        audioUrl: result.job.audioUrl,
-        generatedAt: result.job.generatedAt,
-        errorMessage: result.job.errorMessage,
-      } satisfies PodcastEpisode);
-      updateEpisode(nextEpisode);
-      if (nextEpisode.status !== 'ready' || !nextEpisode.audioUrl) throw new Error(nextEpisode.errorMessage || 'Podcast generation did not produce audio yet.');
-      return nextEpisode;
-    } finally {
-      setGeneratingId(null);
-    }
-  };
-
   const openDetail = (target: DetailTarget) => {
     setMainView('home');
     setPodcastTab(target.source === 'class' ? 'class' : 'mine');
@@ -209,15 +199,13 @@ export function App() {
       setPlayingKey((current) => current === key ? null : key);
       return;
     }
-    try {
-      const generated = await ensureGeneratedEpisode(episode);
-      const item = classEpisodeView(podcastData.podcast, generated);
-      setCurrentTrack(item);
-      setPlayingKey(podcastViewKey(item));
-    } catch (error) {
-      setGenerationError(error instanceof Error ? error.message : 'Unable to generate podcast audio.');
-      setPlayingKey(null);
+    if (episode.status !== 'ready' || !episode.audioUrl) {
+      setGenerationError('This class podcast has not been published yet.');
+      return;
     }
+    const item = classEpisodeView(podcastData.podcast, episode);
+    setCurrentTrack(item);
+    setPlayingKey(podcastViewKey(item));
   };
 
   const playPersonalPodcast = (podcast: PersonalPodcast) => {
@@ -366,19 +354,19 @@ export function App() {
           <div className="podcast-tabs" role="tablist" aria-label="Podcast library">
             <button role="tab" aria-selected={podcastTab === 'class'} className={podcastTab === 'class' ? 'active' : ''} type="button" onClick={() => switchTab('class')}>Class Podcast</button>
             <button role="tab" aria-selected={podcastTab === 'mine'} className={podcastTab === 'mine' ? 'active' : ''} type="button" onClick={() => switchTab('mine')}>My Podcasts</button>
+            {managementData ? <button role="tab" aria-selected={podcastTab === 'manage'} className={podcastTab === 'manage' ? 'active' : ''} type="button" onClick={() => switchTab('manage')}>Manage</button> : null}
           </div>
           {podcastTab === 'class' ? (
             <PodcastOverview
               data={podcastData}
               playingKey={playingKey}
               onSelectEpisode={(episode) => openDetail({ source: 'class', id: episode.id })}
-              onPlayAll={() => { const first = podcastData.episodes[0]; if (first) void playClassEpisode(first); }}
+              onPlayAll={() => { const first = podcastData.episodes.find((episode) => episode.status === 'ready' && episode.audioUrl); if (first) void playClassEpisode(first); }}
               onPlayEpisode={playClassEpisode}
               onRefresh={() => setRefreshKey((key) => key + 1)}
-              generatingId={generatingId}
               onCreate={() => setMainView('creator')}
             />
-          ) : (
+          ) : podcastTab === 'mine' ? (
             <MyPodcasts
               podcasts={myPodcasts}
               loading={myPodcastsLoading}
@@ -389,7 +377,14 @@ export function App() {
               onRetry={retryPersonal}
               onDelete={deletePersonal}
             />
-          )}
+          ) : managementData && bridge.token?.accessToken ? (
+            <PodcastManager
+              data={managementData}
+              token={bridge.token.accessToken}
+              onRefresh={refreshManagement}
+              onPublished={() => setRefreshKey((key) => key + 1)}
+            />
+          ) : null}
         </main>
       ) : null}
 
@@ -397,7 +392,7 @@ export function App() {
         <PodcastDetail
           item={detailItem}
           isPlaying={playingKey === podcastViewKey(detailItem)}
-          isBusy={detailItem.source === 'class' && generatingId === detailItem.id}
+          isBusy={false}
           error={generationError}
           onBack={closeDetail}
           onTogglePlay={() => {

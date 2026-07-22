@@ -84,7 +84,7 @@ export function classEpisodeView(
     durationLabel: episode.durationLabel,
     artLabel: String(episode.lectureNumber),
     status: episode.status,
-    statusLabel: episode.status === 'ready' ? 'Ready' : episode.status === 'failed' ? 'Failed' : 'Generate audio',
+    statusLabel: episode.status === 'ready' ? 'Published' : 'Not published',
     audioUrl: episode.audioUrl,
     transcript,
     materials: [episode.documentName],

@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { GeneratedPodcastScript, PodcastTurn } from './podcast-generation.types';
 import { TtsAnchorMap, TtsService } from './tts.service';
+import { PodcastVoiceSettings } from './podcast-management.types';
 
 export interface AudioProductionProgress {
   completedChunks: number;
@@ -62,6 +63,7 @@ export class AudioProductionService {
   async produce(
     script: GeneratedPodcastScript,
     onProgress?: (progress: AudioProductionProgress) => void | Promise<void>,
+    voiceSettings?: PodcastVoiceSettings,
   ): Promise<Buffer> {
     await mkdir(this.tempRoot, { recursive: true });
     await this.cleanupStaleWorkspaces();
@@ -76,15 +78,21 @@ export class AudioProductionService {
         SPEAKER1: `guest-${runId}`,
       };
 
-      const hostAnchor = await this.tts.buildAnchor('HOST_A', anchors.SPEAKER0);
+      const hostAnchor = voiceSettings
+        ? await this.tts.buildAnchor('HOST_A', anchors.SPEAKER0, voiceSettings)
+        : await this.tts.buildAnchor('HOST_A', anchors.SPEAKER0);
       this.validateWav(hostAnchor, 'HOST_A voice anchor');
-      const guestAnchor = await this.tts.buildAnchor('HOST_B', anchors.SPEAKER1);
+      const guestAnchor = voiceSettings
+        ? await this.tts.buildAnchor('HOST_B', anchors.SPEAKER1, voiceSettings)
+        : await this.tts.buildAnchor('HOST_B', anchors.SPEAKER1);
       this.validateWav(guestAnchor, 'HOST_B voice anchor');
 
       const chunkPaths: string[] = [];
       let expectedFormat: WavFormat | undefined;
       for (const [index, chunk] of chunks.entries()) {
-        const wav = await this.tts.synthesizeChunk(chunk, anchors);
+        const wav = voiceSettings
+          ? await this.tts.synthesizeChunk(chunk, anchors, voiceSettings)
+          : await this.tts.synthesizeChunk(chunk, anchors);
         const format = this.validateWav(wav, `chunk ${index + 1}`);
         if (expectedFormat) this.assertCompatibleFormat(expectedFormat, format, index);
         else expectedFormat = format;

@@ -37,10 +37,14 @@ export interface GeneratedPodcastScript {
 }
 
 export interface PodcastJob {
+  id?: string;
   episodeId: string;
   classId: string;
   documentId: string;
   status: PodcastJobStatus;
+  progressPercent?: number;
+  statusMessage?: string;
+  draftRevision?: number;
   scriptPath?: string;
   audioStorageKey?: string;
   audioUrl?: string;

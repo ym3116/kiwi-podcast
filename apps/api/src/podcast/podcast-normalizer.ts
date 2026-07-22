@@ -18,11 +18,6 @@ function cleanDocumentName(document: KiwiDocument, index: number): string {
   return removeExtension(rawName) || `Document ${index + 1}`;
 }
 
-function estimateDuration(index: number): string {
-  const minutes = 8 + (index % 4) * 3;
-  return `${minutes} min`;
-}
-
 function extractDocuments(payload: KiwiMaterialsPayload): KiwiDocument[] {
   if (Array.isArray(payload.materials?.documents)) {
     return payload.materials.documents;
@@ -62,7 +57,7 @@ export function normalizePodcastPayload(
       lectureNumber,
       documentName,
       materialType,
-      durationLabel: estimateDuration(index),
+      durationLabel: 'Not published',
       script: DEFAULT_SCRIPT,
       status: 'placeholder',
     };

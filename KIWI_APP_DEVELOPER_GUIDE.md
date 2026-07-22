@@ -327,6 +327,13 @@ scopes, userId }`, and skips session checks (`src/auth/auth.guard.ts:609`).
 | `class:enrollments:read` | MCP resource `kiwi://users/{userId}/enrollments` (`user.resource.ts:205`) |
 | `llm:prompt:<promptId>` | MCP tool `kiwi_app_chat` for an approved prompt (`kiwi-app-chat.tool.ts:87`) |
 
+Kiwi Podcast additionally registers the free-form `podcast:manage` scope. Kiwi
+includes it in the app token only when it is present in both whitelist
+`maxScopes` and class `enabledScopes`; the external Podcast API then enforces it
+alongside `class:info:read`, the verified app/class token claims, and Kiwi's
+effective class role. It is an application-owned authorization scope, not a
+built-in Kiwi MCP resource scope.
+
 > These scope checks run on Kiwi's MCP server. Iframe apps call the same MCP
 > server through Streamable HTTP at `POST /mcp`, using the scoped app token and
 > the standard MCP initialize/session flow.

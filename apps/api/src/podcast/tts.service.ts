@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
+import * as crypto from 'node:crypto';
 import { PodcastTurn } from './podcast-generation.types';
+import { PodcastVoiceSettings, VoiceProfile } from './podcast-management.types';
 
 export type TtsSpeakerTag = 'SPEAKER0' | 'SPEAKER1';
 export type TtsAnchorMap = Record<TtsSpeakerTag, string>;
@@ -45,8 +47,32 @@ export class TtsService {
     },
   };
 
-  async buildAnchor(speaker: PodcastTurn['speaker'], anchor: string): Promise<Buffer> {
-    const config = this.speakers[speaker];
+  defaultVoiceSettings(): PodcastVoiceSettings {
+    return {
+      host: this.profileFor('HOST_A'),
+      speaker: this.profileFor('HOST_B'),
+    };
+  }
+
+  async buildAnchor(
+    speaker: PodcastTurn['speaker'],
+    anchor: string,
+    settings?: PodcastVoiceSettings,
+  ): Promise<Buffer> {
+    const config = this.voiceFor(speaker, settings);
+    if (config.mode === 'custom') {
+      return this.requestSpeech({
+        voice: 'alloy',
+        input: config.referenceText,
+        instructions: JSON.stringify({
+          mode: 'build_anchor',
+          anchor,
+          scene: config.description,
+          seed: config.seed,
+          temperature: this.temperature,
+        }),
+      });
+    }
     return this.requestSpeech({
       voice: config.voice,
       input: config.referenceText,
@@ -59,13 +85,13 @@ export class TtsService {
     });
   }
 
-  async synthesizeChunk(turns: PodcastTurn[], anchors: TtsAnchorMap): Promise<Buffer> {
+  async synthesizeChunk(
+    turns: PodcastTurn[],
+    anchors: TtsAnchorMap,
+    settings?: PodcastVoiceSettings,
+  ): Promise<Buffer> {
     if (turns.length === 0) throw new Error('Cannot synthesize an empty podcast chunk');
 
-    const refTexts: Record<TtsSpeakerTag, string> = {
-      SPEAKER0: this.speakers.HOST_A.referenceText,
-      SPEAKER1: this.speakers.HOST_B.referenceText,
-    };
     const orderedAnchors: TtsAnchorMap = {
       SPEAKER0: anchors.SPEAKER0,
       SPEAKER1: anchors.SPEAKER1,
@@ -77,10 +103,9 @@ export class TtsService {
       instructions: JSON.stringify({
         mode: 'multi',
         speakers: orderedAnchors,
-        system_prompt: this.buildSystemPrompt(),
+        system_prompt: this.buildSystemPrompt(settings),
         seed: this.multiSeed,
         temperature: this.temperature,
-        ref_texts: refTexts,
       }),
     });
   }
@@ -89,16 +114,39 @@ export class TtsService {
     return `[${this.speakers[turn.speaker].tag}] ${turn.text.trim()}`;
   }
 
-  buildSystemPrompt(): string {
+  buildSystemPrompt(settings?: PodcastVoiceSettings): string {
+    const host = this.voiceFor('HOST_A', settings);
+    const speaker = this.voiceFor('HOST_B', settings);
     return [
       'You are an AI assistant designed to convert text into speech.',
       "If the user's message includes a [SPEAKER*] tag, do not read out the tag and generate speech for the following text, using the specified voice.",
       '<|scene_desc_start|>',
-      `SPEAKER0: ${this.speakers.HOST_A.description}`,
-      `SPEAKER1: ${this.speakers.HOST_B.description}`,
+      `SPEAKER0: ${host.description}`,
+      `SPEAKER1: ${speaker.description}`,
       this.scene,
       '<|scene_desc_end|>',
     ].join('\n');
+  }
+
+  async preview(profile: VoiceProfile): Promise<Buffer> {
+    const settings = { host: profile, speaker: profile };
+    return this.buildAnchor('HOST_A', `preview-${crypto.randomUUID()}`, settings);
+  }
+
+  private voiceFor(speaker: PodcastTurn['speaker'], settings?: PodcastVoiceSettings): VoiceProfile {
+    if (!settings) return this.profileFor(speaker);
+    return speaker === 'HOST_A' ? settings.host : settings.speaker;
+  }
+
+  private profileFor(speaker: PodcastTurn['speaker']): VoiceProfile {
+    const config = this.speakers[speaker];
+    return {
+      mode: 'preset',
+      voice: config.voice as VoiceProfile['voice'],
+      description: config.description,
+      seed: speaker === 'HOST_A' ? Number(process.env.TTS_HOST_A_SEED ?? 505) : Number(process.env.TTS_HOST_B_SEED ?? 404),
+      referenceText: config.referenceText,
+    };
   }
 
   private async requestSpeech(input: {

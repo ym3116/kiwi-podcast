@@ -116,21 +116,6 @@ export class PodcastController {
     }
   }
 
-  @Post('classes/:classId/episodes/:documentId/generate')
-  async generateEpisode(
-    @Param('classId') classId: string,
-    @Param('documentId') documentId: string,
-    @Headers('authorization') authorization?: string,
-  ) {
-    this.requireBearerToken(authorization);
-
-    const result = await this.podcastService.generateEpisode(classId, documentId);
-    if (result.job.status === 'failed') {
-      throw new HttpException(result.job, HttpStatus.BAD_GATEWAY);
-    }
-    return result;
-  }
-
   @Get('classes/:classId/episodes/:documentId/status')
   async getGenerationStatus(
     @Param('classId') classId: string,

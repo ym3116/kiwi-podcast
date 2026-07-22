@@ -69,3 +69,59 @@ export interface PersonalPodcast {
   createdAt: string;
   updatedAt: string;
 }
+
+export const presetVoices = ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'] as const;
+export type PresetVoice = (typeof presetVoices)[number];
+
+export interface VoiceProfile {
+  mode: 'preset' | 'custom';
+  voice: PresetVoice;
+  description: string;
+  seed: number;
+  referenceText: string;
+}
+
+export interface PodcastVoiceSettings {
+  host: VoiceProfile;
+  speaker: VoiceProfile;
+}
+
+export interface EpisodeVoiceOverrides {
+  host?: VoiceProfile;
+  speaker?: VoiceProfile;
+}
+
+export interface ManagedRender {
+  jobId: string;
+  status: PodcastEpisode['status'];
+  progressPercent: number;
+  statusMessage: string;
+  errorMessage?: string | null;
+  draftRevision?: number | null;
+  generatedAt?: string | null;
+  previewAvailable: boolean;
+}
+
+export interface ManagedEpisode {
+  documentId: string;
+  documentName: string;
+  materialType: string;
+  title: string;
+  draft: {
+    summary: string;
+    durationTargetMinutes: number;
+    turns: Array<{ speaker: 'HOST_A' | 'HOST_B'; text: string }>;
+    revision: number;
+  };
+  voiceOverrides: EpisodeVoiceOverrides;
+  effectiveVoices: PodcastVoiceSettings;
+  published: { jobId: string; generatedAt: string; audioUrl: string } | null;
+  latestRender: ManagedRender | null;
+}
+
+export interface PodcastManagementState {
+  classId: string;
+  className: string;
+  defaults: PodcastVoiceSettings;
+  episodes: ManagedEpisode[];
+}

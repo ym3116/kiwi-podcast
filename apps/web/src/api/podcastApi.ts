@@ -1,4 +1,13 @@
-import { DemoMaterial, PersonalPodcast, PodcastDifficulty, PodcastEpisode, PodcastResponse } from '../types/podcast';
+import {
+  DemoMaterial,
+  EpisodeVoiceOverrides,
+  PersonalPodcast,
+  PodcastDifficulty,
+  PodcastManagementState,
+  PodcastResponse,
+  PodcastVoiceSettings,
+  VoiceProfile,
+} from '../types/podcast';
 
 const apiBase = () => (import.meta.env.VITE_PODCAST_API_BASE || 'http://localhost:8010').replace(/\/$/, '');
 
@@ -83,35 +92,74 @@ export async function deleteMyPodcast(classId: string, podcastId: string, userId
   );
 }
 
-export async function generatePodcastEpisode(
-  classId: string,
-  documentId: string,
-  accessToken: string,
-): Promise<{ episode?: PodcastEpisode; job: PodcastEpisodeJob }> {
-  const response = await fetch(
-    `${apiBase()}/api/podcast/classes/${encodeURIComponent(classId)}/episodes/${encodeURIComponent(documentId)}/generate`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    },
-  );
+const managePath = (classId: string) => `/api/podcast/classes/${encodeURIComponent(classId)}/manage`;
 
+export async function fetchPodcastManagement(classId: string, token: string) {
+  const response = await fetch(`${apiBase()}${managePath(classId)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (response.status === 403 || response.status === 401) return null;
   const body = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(body?.errorMessage || body?.error || `Generate returned ${response.status}`);
-  }
-
-  return body as { episode?: PodcastEpisode; job: PodcastEpisodeJob };
+  if (!response.ok) throw new Error(body?.error || `Management API returned ${response.status}`);
+  return body as PodcastManagementState;
 }
 
-interface PodcastEpisodeJob {
-  episodeId: string;
-  classId: string;
-  documentId: string;
-  status: PodcastEpisode['status'];
-  audioUrl?: string;
-  generatedAt?: string;
-  errorMessage?: string;
+export function updatePodcastDefaults(classId: string, token: string, defaults: PodcastVoiceSettings) {
+  return apiJson<PodcastVoiceSettings>(`${managePath(classId)}/defaults`, token, {
+    method: 'PATCH', body: JSON.stringify(defaults),
+  });
+}
+
+export function updateManagedEpisode(
+  classId: string,
+  documentId: string,
+  token: string,
+  input: {
+    title?: string;
+    draft?: { summary?: string; durationTargetMinutes?: number; turns: Array<{ speaker: 'HOST_A' | 'HOST_B'; text: string }> };
+    voiceOverrides?: EpisodeVoiceOverrides;
+  },
+) {
+  return apiJson<{ saved: true }>(`${managePath(classId)}/episodes/${encodeURIComponent(documentId)}`, token, {
+    method: 'PATCH', body: JSON.stringify(input),
+  });
+}
+
+export function generateManagedDraft(classId: string, documentId: string, token: string) {
+  return apiJson(`${managePath(classId)}/episodes/${encodeURIComponent(documentId)}/draft/generate`, token, { method: 'POST' });
+}
+
+export function renderManagedEpisode(classId: string, documentId: string, token: string) {
+  return apiJson(`${managePath(classId)}/episodes/${encodeURIComponent(documentId)}/render`, token, { method: 'POST' });
+}
+
+export function publishManagedEpisode(classId: string, documentId: string, jobId: string, token: string) {
+  return apiJson(`${managePath(classId)}/episodes/${encodeURIComponent(documentId)}/publish`, token, {
+    method: 'POST', body: JSON.stringify({ jobId }),
+  });
+}
+
+export function deleteManagedEpisode(classId: string, documentId: string, token: string) {
+  return apiJson(`${managePath(classId)}/episodes/${encodeURIComponent(documentId)}`, token, { method: 'DELETE' });
+}
+
+export async function previewManagedVoice(classId: string, profile: VoiceProfile, token: string) {
+  const response = await fetch(`${apiBase()}${managePath(classId)}/voice-preview`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(profile),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.error || `Voice preview returned ${response.status}`);
+  }
+  return response.blob();
+}
+
+export async function fetchManagedPreviewAudio(classId: string, jobId: string, token: string) {
+  const response = await fetch(`${apiBase()}${managePath(classId)}/jobs/${encodeURIComponent(jobId)}/audio`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) throw new Error(`Preview audio returned ${response.status}`);
+  return response.blob();
 }

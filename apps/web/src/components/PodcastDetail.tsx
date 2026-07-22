@@ -28,7 +28,7 @@ export function PodcastDetail({
     : isReady
       ? isPlaying ? 'Pause' : 'Play'
       : item.source === 'class'
-        ? isFailed ? 'Try again' : 'Generate audio'
+        ? 'Not published'
         : item.statusMessage || 'Generating';
 
   return (
@@ -52,7 +52,7 @@ export function PodcastDetail({
           <h1 id="podcast-detail-title">{item.title}</h1>
           <p>{item.summary}</p>
           <div className="detail-actions">
-            {!isFailed || item.source === 'class' ? (
+            {item.source !== 'class' || isReady ? (
               <button
                 className="primary-button"
                 type="button"
