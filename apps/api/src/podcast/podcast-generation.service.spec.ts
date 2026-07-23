@@ -7,15 +7,14 @@ import { AudioProductionService } from './audio-production.service';
 describe('PodcastGenerationService', () => {
   it('moves a job through generating to ready', async () => {
     const store = inMemoryStore();
+    const getChunks = vi.fn().mockResolvedValue({
+      classId: 'class-1',
+      documentId: 'doc-1',
+      documentName: 'Loops',
+      chunks: [{ text: 'Loops repeat work.' }],
+    });
     const service = new PodcastGenerationService(
-      {
-        getChunks: vi.fn().mockResolvedValue({
-          classId: 'class-1',
-          documentId: 'doc-1',
-          documentName: 'Loops',
-          chunks: [{ text: 'Loops repeat work.' }],
-        }),
-      },
+      { getChunks } as never,
       store as unknown as PodcastArtifactStore,
       {
         generate: vi.fn().mockResolvedValue({
@@ -28,9 +27,10 @@ describe('PodcastGenerationService', () => {
       { produce: vi.fn().mockResolvedValue(Buffer.from([1])) } as unknown as AudioProductionService,
     );
 
-    const result = await service.generate('class-1', 'doc-1');
+    const result = await service.generate('class-1', 'doc-1', 'token');
 
     expect(store.statuses).toEqual(['generating', 'ready']);
+    expect(getChunks).toHaveBeenCalledWith('class-1', 'doc-1', 'token');
     expect(result.job.status).toBe('ready');
     expect(result.episode?.audioUrl).toContain('/api/podcast/audio/episode-doc-1');
   });
@@ -40,13 +40,13 @@ describe('PodcastGenerationService', () => {
     const service = new PodcastGenerationService(
       {
         getChunks: vi.fn().mockRejectedValue(new Error('missing chunks')),
-      },
+      } as never,
       store as unknown as PodcastArtifactStore,
       {} as ScriptGeneratorService,
       {} as AudioProductionService,
     );
 
-    const result = await service.generate('class-1', 'doc-1');
+    const result = await service.generate('class-1', 'doc-1', 'token');
 
     expect(store.statuses).toEqual(['generating', 'failed']);
     expect(result.job).toMatchObject({ status: 'failed', errorMessage: 'missing chunks' });
@@ -57,13 +57,13 @@ describe('PodcastGenerationService', () => {
     store.nextBeginStarted = false;
     const getChunks = vi.fn();
     const service = new PodcastGenerationService(
-      { getChunks },
+      { getChunks } as never,
       store as unknown as PodcastArtifactStore,
       {} as ScriptGeneratorService,
       {} as AudioProductionService,
     );
 
-    const result = await service.generate('class-1', 'doc-1');
+    const result = await service.generate('class-1', 'doc-1', 'token');
 
     expect(result.job).toMatchObject({ status: 'generating' });
     expect(getChunks).not.toHaveBeenCalled();

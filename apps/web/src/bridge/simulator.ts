@@ -15,7 +15,12 @@ export const simulatorContext: KiwiContext = {
 
 export const simulatorToken: KiwiAppToken = {
   accessToken: 'simulated-kiwi-app-token',
-  scopes: ['user:profile:read', 'class:info:read', 'class:enrollments:read'],
+  scopes: [
+    'user:profile:read',
+    'class:info:read',
+    'class:enrollments:read',
+    'class:materials:chunks:read',
+  ],
   expiresIn: 3600,
   appSlug: 'kiwi-podcast',
 };

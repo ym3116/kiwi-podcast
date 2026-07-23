@@ -173,4 +173,24 @@ describe('App', () => {
     await user.click(screen.getByRole('button', { name: 'Create your podcast' }));
     expect(screen.getByLabelText('Now playing')).toHaveTextContent('Regularization review');
   });
+
+  it('describes creator materials as live Kiwi documents', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ materials: [] }),
+    })));
+    render(<App />);
+
+    await screen.findByText('Regularization - Podcast');
+    await user.click(screen.getByRole('button', { name: 'Create your podcast' }));
+    await user.type(
+      screen.getByPlaceholderText(/Help me understand regularization/i),
+      'Explain the current lecture material',
+    );
+    await user.click(screen.getByRole('button', { name: /Continue/i }));
+
+    expect(await screen.findByText(/live Kiwi class documents/i)).toBeInTheDocument();
+    expect(screen.getByText('No parsed Kiwi documents are currently available for this class.')).toBeInTheDocument();
+  });
 });

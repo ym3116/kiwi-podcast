@@ -25,9 +25,12 @@ export class PodcastController {
   ) {}
 
   @Get('classes/:classId/creator/materials')
-  async getCreatorMaterials(@Headers('authorization') authorization?: string) {
-    this.requireBearerToken(authorization);
-    return { materials: await this.personalPodcasts.listMaterials() };
+  async getCreatorMaterials(
+    @Param('classId') classId: string,
+    @Headers('authorization') authorization?: string,
+  ) {
+    const accessToken = this.requireBearerToken(authorization);
+    return { materials: await this.personalPodcasts.listMaterials(classId, accessToken) };
   }
 
   @Post('classes/:classId/my-podcasts')
@@ -36,8 +39,8 @@ export class PodcastController {
     @Body() input: CreatePersonalPodcastInput,
     @Headers('authorization') authorization?: string,
   ) {
-    this.requireBearerToken(authorization);
-    return this.personalPodcasts.create(classId, input);
+    const accessToken = this.requireBearerToken(authorization);
+    return this.personalPodcasts.create(classId, input, accessToken);
   }
 
   @Get('classes/:classId/my-podcasts')
@@ -68,8 +71,8 @@ export class PodcastController {
     @Body('ownerUserId') ownerUserId: string,
     @Headers('authorization') authorization?: string,
   ) {
-    this.requireBearerToken(authorization);
-    return this.personalPodcasts.retry(classId, podcastId, ownerUserId);
+    const accessToken = this.requireBearerToken(authorization);
+    return this.personalPodcasts.retry(classId, podcastId, ownerUserId, accessToken);
   }
 
   @Delete('classes/:classId/my-podcasts/:podcastId')
@@ -176,4 +179,5 @@ export class PodcastController {
     }
     return accessToken;
   }
+
 }

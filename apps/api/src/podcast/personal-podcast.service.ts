@@ -2,7 +2,8 @@ import { HttpException, HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { PersonalPodcast, PersonalPodcastStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { AudioStorageService } from '../storage/audio-storage.service';
-import { LocalDemoChunkSource } from './local-demo-chunk-source';
+import { PodcastChunkSourceService } from './podcast-chunk-source.service';
+import { PodcastMaterial } from './podcast-chunk-source';
 import { PodcastDifficulty } from './podcast-generation.types';
 import { ScriptGeneratorService } from './script-generator.service';
 import { AudioProductionService } from './audio-production.service';
@@ -24,20 +25,32 @@ export class PersonalPodcastService {
 
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
-    @Inject(LocalDemoChunkSource) private readonly source: LocalDemoChunkSource,
+    @Inject(PodcastChunkSourceService) private readonly source: PodcastChunkSourceService,
     @Inject(ScriptGeneratorService) private readonly scripts: ScriptGeneratorService,
     @Inject(AudioProductionService) private readonly audioProduction: AudioProductionService,
     @Inject(AudioStorageService) private readonly audioStorage: AudioStorageService,
   ) {}
 
-  listMaterials() {
-    return this.source.listDemoMaterials();
+  async listMaterials(classId: string, accessToken: string) {
+    try {
+      return await this.source.listMaterials(classId, accessToken);
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      const message = error instanceof Error ? error.message : String(error);
+      const status = /denied|missing required scope/i.test(message)
+        ? HttpStatus.FORBIDDEN
+        : /rejected or expired the app token/i.test(message)
+          ? HttpStatus.UNAUTHORIZED
+          : /not available|does not contain any text chunks/i.test(message)
+            ? HttpStatus.UNPROCESSABLE_ENTITY
+            : HttpStatus.BAD_GATEWAY;
+      throw new HttpException({ error: message }, status);
+    }
   }
 
-  async create(classId: string, input: CreatePersonalPodcastInput) {
-    await this.validateInput(input);
-    const materials = await this.source.listDemoMaterials();
-    const selected = input.materialIds.map((id) => materials.find((material) => material.id === id)!);
+  async create(classId: string, input: CreatePersonalPodcastInput, accessToken: string) {
+    const selected = await this.validateInput(classId, input, accessToken);
+    const selectedMetadata = selected.map((material) => ({ ...material, preview: '' }));
     const podcast = await this.prisma.personalPodcast.create({
       data: {
         classId,
@@ -45,10 +58,10 @@ export class PersonalPodcastService {
         prompt: input.prompt.trim(),
         durationMinutes: input.durationMinutes,
         difficulty: input.difficulty,
-        selectedMaterials: selected as unknown as Prisma.InputJsonValue,
+        selectedMaterials: selectedMetadata as unknown as Prisma.InputJsonValue,
       },
     });
-    void this.generate(podcast.id);
+    void this.generate(podcast.id, accessToken);
     return this.toResponse(podcast);
   }
 
@@ -66,7 +79,7 @@ export class PersonalPodcastService {
     return this.toResponse(podcast);
   }
 
-  async retry(classId: string, id: string, ownerUserId: string) {
+  async retry(classId: string, id: string, ownerUserId: string, accessToken: string) {
     const podcast = await this.owned(classId, id, ownerUserId);
     if (podcast.status !== 'failed') {
       throw new HttpException({ error: 'Only failed podcasts can be retried' }, HttpStatus.CONFLICT);
@@ -81,7 +94,7 @@ export class PersonalPodcastService {
         completedAt: null,
       },
     });
-    void this.generate(id);
+    void this.generate(id, accessToken);
     return this.toResponse(reset);
   }
 
@@ -111,7 +124,11 @@ export class PersonalPodcastService {
     return podcast.audioStorageKey;
   }
 
-  private async validateInput(input: CreatePersonalPodcastInput) {
+  private async validateInput(
+    classId: string,
+    input: CreatePersonalPodcastInput,
+    accessToken: string,
+  ): Promise<PodcastMaterial[]> {
     if (!input.ownerUserId?.trim()) this.badRequest('ownerUserId is required');
     if (input.prompt?.trim().length < 10 || input.prompt.trim().length > 1000) {
       this.badRequest('Prompt must be between 10 and 1000 characters');
@@ -124,11 +141,13 @@ export class PersonalPodcastService {
     if (unique.length < 1 || unique.length > 5 || unique.length !== input.materialIds?.length) {
       this.badRequest('Choose between one and five unique materials');
     }
-    const available = new Set((await this.source.listDemoMaterials()).map((material) => material.id));
+    const materials = await this.listMaterials(classId, accessToken);
+    const available = new Map(materials.map((material) => [material.id, material]));
     if (unique.some((id) => !available.has(id))) this.badRequest('One or more materials do not exist');
+    return unique.map((id) => available.get(id)!);
   }
 
-  private async generate(id: string) {
+  private async generate(id: string, accessToken: string) {
     try {
       const podcast = await this.prisma.personalPodcast.findUniqueOrThrow({ where: { id } });
       const materials = podcast.selectedMaterials as unknown as Array<{ id: string }>;
@@ -138,6 +157,7 @@ export class PersonalPodcastService {
       const bundle = await this.source.getCombinedChunks(
         podcast.classId,
         materials.map((material) => material.id),
+        accessToken,
       );
       await this.stage(id, 'generating_script', 35, 'Writing your podcast', {
         sourceMetadata: bundle.sourceMetadata as unknown as Prisma.InputJsonValue,

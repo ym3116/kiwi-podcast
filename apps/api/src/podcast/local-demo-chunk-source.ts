@@ -1,26 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
+import {
+  PodcastChunkBundle,
+  PodcastChunkSource,
+  PodcastMaterial,
+} from './podcast-chunk-source';
 import { PodcastChunkInput } from './podcast-generation.types';
-
-export interface PodcastChunkSource {
-  getChunks(
-    classId: string,
-    documentId: string,
-    canonical?: { documentName: string },
-  ): Promise<PodcastChunkInput>;
-}
-
-export interface DemoMaterial {
-  id: string;
-  documentId: string;
-  documentName: string;
-  materialId?: string;
-  materialType: string;
-  chunkCount: number;
-  pageCount?: number;
-  preview: string;
-}
 
 @Injectable()
 export class LocalDemoChunkSource implements PodcastChunkSource {
@@ -30,6 +16,7 @@ export class LocalDemoChunkSource implements PodcastChunkSource {
   async getChunks(
     classId: string,
     documentId: string,
+    _accessToken: string,
     canonical?: { documentName: string },
   ): Promise<PodcastChunkInput> {
     const payload = await this.readChunkFile(documentId, Boolean(canonical));
@@ -59,9 +46,9 @@ export class LocalDemoChunkSource implements PodcastChunkSource {
     };
   }
 
-  async listDemoMaterials(): Promise<DemoMaterial[]> {
+  async listMaterials(_classId: string, _accessToken: string): Promise<PodcastMaterial[]> {
     const files = (await readdir(this.chunkDir)).filter((file) => file.endsWith('.json')).sort();
-    const materials: Array<DemoMaterial | null> = await Promise.all(
+    const materials: Array<PodcastMaterial | null> = await Promise.all(
       files.map(async (file) => {
         try {
           const payload = JSON.parse(
@@ -92,14 +79,17 @@ export class LocalDemoChunkSource implements PodcastChunkSource {
         }
       }),
     );
-    return materials.filter((material): material is DemoMaterial => material !== null);
+    return materials.filter((material): material is PodcastMaterial => material !== null);
   }
 
   async getCombinedChunks(
     classId: string,
     documentIds: string[],
-  ): Promise<PodcastChunkInput & { sourceMetadata: Array<Record<string, unknown>> }> {
-    const inputs = await Promise.all(documentIds.map((id) => this.getChunks(classId, id)));
+    accessToken: string,
+  ): Promise<PodcastChunkBundle> {
+    const inputs = await Promise.all(
+      documentIds.map((id) => this.getChunks(classId, id, accessToken)),
+    );
     const maxCharacters = Number(process.env.PODCAST_MAX_SOURCE_CHARACTERS ?? 60000);
     const perMaterialBudget = Math.max(1, Math.floor(maxCharacters / inputs.length));
     const chunks = inputs.flatMap((input) => {

@@ -25,7 +25,12 @@ describe('LocalDemoChunkSource', () => {
     );
 
     const source = new LocalDemoChunkSource();
-    const result = await source.getChunks('class-1', 'doc-1', { documentName: 'Canonical Kiwi name' });
+    const result = await source.getChunks(
+      'class-1',
+      'doc-1',
+      'simulated-kiwi-app-token',
+      { documentName: 'Canonical Kiwi name' },
+    );
 
     expect(result).toMatchObject({
       classId: 'class-1',
@@ -40,7 +45,12 @@ describe('LocalDemoChunkSource', () => {
     process.env.PODCAST_DEMO_CHUNKS_DIR = dir;
     const source = new LocalDemoChunkSource();
 
-    await expect(source.getChunks('class-1', 'missing', { documentName: 'Missing' })).rejects.toThrow(
+    await expect(source.getChunks(
+      'class-1',
+      'missing',
+      'simulated-kiwi-app-token',
+      { documentName: 'Missing' },
+    )).rejects.toThrow(
       'Local chunks are not available for Kiwi document missing',
     );
   });
@@ -55,14 +65,24 @@ describe('LocalDemoChunkSource', () => {
     }));
     const source = new LocalDemoChunkSource();
 
-    await expect(source.getChunks('class-1', 'doc-1', { documentName: 'Canonical' })).rejects.toThrow(
+    await expect(source.getChunks(
+      'class-1',
+      'doc-1',
+      'simulated-kiwi-app-token',
+      { documentName: 'Canonical' },
+    )).rejects.toThrow(
       'does not match Kiwi document doc-1',
     );
 
     await writeFile(path.join(dir, 'doc-1.json'), JSON.stringify({
       classId: 'wrong-class', documentId: 'doc-1', chunks: [{ text: 'Still do not use this.' }],
     }));
-    await expect(source.getChunks('class-1', 'doc-1', { documentName: 'Canonical' })).rejects.toThrow(
+    await expect(source.getChunks(
+      'class-1',
+      'doc-1',
+      'simulated-kiwi-app-token',
+      { documentName: 'Canonical' },
+    )).rejects.toThrow(
       'does not match Kiwi class class-1',
     );
   });
@@ -74,7 +94,11 @@ describe('LocalDemoChunkSource', () => {
       classId: 'fixture-class', documentId: 'doc-1', documentName: 'Fixture name', chunks: [{ text: 'Demo text.' }],
     }));
 
-    await expect(new LocalDemoChunkSource().getChunks('current-class', 'doc-1')).resolves.toMatchObject({
+    await expect(new LocalDemoChunkSource().getChunks(
+      'current-class',
+      'doc-1',
+      'simulated-kiwi-app-token',
+    )).resolves.toMatchObject({
       classId: 'fixture-class', documentName: 'Fixture name',
     });
   });
@@ -85,7 +109,11 @@ describe('LocalDemoChunkSource', () => {
     await writeFile(path.join(dir, 'doc-1.json'), JSON.stringify({ chunks: [{ text: ' ' }] }));
     const source = new LocalDemoChunkSource();
 
-    await expect(source.getChunks('class-1', 'doc-1')).rejects.toThrow(
+    await expect(source.getChunks(
+      'class-1',
+      'doc-1',
+      'simulated-kiwi-app-token',
+    )).rejects.toThrow(
       'does not contain any text chunks',
     );
   });
@@ -101,8 +129,12 @@ describe('LocalDemoChunkSource', () => {
     );
 
     const source = new LocalDemoChunkSource();
-    const catalog = await source.listDemoMaterials();
-    const combined = await source.getCombinedChunks('class-1', ['doc-2', 'doc-1']);
+    const catalog = await source.listMaterials('class-1', 'simulated-kiwi-app-token');
+    const combined = await source.getCombinedChunks(
+      'class-1',
+      ['doc-2', 'doc-1'],
+      'simulated-kiwi-app-token',
+    );
 
     expect(catalog.map((material) => material.id)).toEqual(['doc-1', 'doc-2']);
     expect(combined.chunks.map((chunk) => [chunk.documentId, chunk.text])).toEqual([

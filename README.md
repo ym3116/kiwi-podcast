@@ -157,8 +157,9 @@ admin whitelist -> public app register -> admin/instructor enable in class
 
 Then open the class in Kiwi and use the `Podcast` tab.
 
-The registration helper creates or updates `podcast:manage` and
-`class:info:read` in both the whitelist and class enablement. The embedded frontend probes the protected
+The registration helper creates or updates `podcast:manage`,
+`class:info:read`, and `class:materials:chunks:read` in both the whitelist and
+class enablement. The embedded frontend probes the protected
 management API after receiving `kiwi:context` and `kiwi:appToken`; the
 **Manage** tab appears only when the API verifies a global admin or active class
 professor/instructor. Students and TAs receive `403`, so the tab remains hidden.
@@ -180,19 +181,14 @@ toggleable audio player, so starting one stops any other podcast or preview.
 Published class runtimes are measured from the final rendered master audio and
 displayed as `m:ss`; they are not estimated from a requested target length.
 
-Kiwi supplies the class, user, role, token scopes, and canonical document
-metadata. Until Kiwi exposes extracted document text to this app, automatic
-draft generation reads only chunk text and optional page numbers from:
-
-```text
-apps/api/demo-chunks/<real-kiwi-document-id>.json
-```
-
-The file may declare `classId` and must identify the requested `documentId`.
-Mismatched identifiers are rejected, and its document name/material type never
-replace live Kiwi metadata. If no export exists, automatic draft generation
-returns a clear error; manual script editing, rendering, and publishing remain
-available.
+Kiwi supplies the class, user, role, token scopes, canonical document metadata,
+and parsed document text. Automatic draft generation requests the selected
+document in real time from
+`GET /api/kiwi-apps/classes/:classId/document-chunks`, follows its opaque
+cursor until complete, and uses only text plus optional page numbers. The
+request is filtered to the canonical student-facing document ID and requires
+`class:materials:chunks:read`; raw chunks and app tokens are never stored in the
+Podcast database.
 
 Apply the management migration before opening the tab:
 
@@ -211,15 +207,16 @@ and voice configuration for regeneration.
 
 ### Guided personal podcasts
 
-The `My Podcasts` tab provides a guided creator for a prompt, one to five local
+The `My Podcasts` tab provides a guided creator for a prompt, one to five live Kiwi
 materials, a 5/10/15-minute target, and beginner/intermediate/advanced
 difficulty. Generation runs as a staged background job and the UI polls its
 persisted progress through script generation, TTS, and saving.
 
-Creator materials are discovered from `apps/api/demo-chunks/*.json`. Each file
-must contain `documentId`, `documentName`, and a non-empty `chunks` array. Adding
-another exported Kiwi chunk JSON file automatically makes it selectable; the
-creator does not read live Kiwi embeddings or material contents yet.
+Creator materials come from Kiwi's canonical class-document resource and are
+enriched with live chunk counts, page counts, and previews. Generation
+re-fetches the selected documents, so a retry uses the newest text available in
+Kiwi. Chunk requests are always filtered to canonical document IDs; this avoids
+requesting unrelated variants such as answer-key documents.
 
 After pulling this version, apply the database migrations:
 
@@ -228,10 +225,10 @@ npm run db:generate -w apps/api
 npm run db:migrate -w apps/api
 ```
 
-List the local creator catalog:
+List the live creator catalog with a Kiwi app token:
 
 ```bash
-curl -H "Authorization: Bearer local-dev-token" \
+curl -H "Authorization: Bearer $KIWI_APP_TOKEN" \
   http://localhost:8010/api/podcast/classes/demo-class/creator/materials
 ```
 
@@ -249,10 +246,10 @@ Compose contains infrastructure only: PostgreSQL and MinIO. When Nest starts,
 its storage service idempotently creates the private `kiwi-podcasts` bucket.
 Audio is streamed through Nest; the browser never receives MinIO credentials.
 
-Chunk exports remain local and ignored at
-`apps/api/demo-chunks/*.json`. Place approved Kiwi chunk exports there before
-starting the creator or generating a managed class draft. The personal creator
-continues to discover its local material catalog independently.
+Chunk exports remain local and ignored at `apps/api/demo-chunks/*.json`, but
+they are used only by standalone Simulator mode. The exact simulator token
+selects that fixture source; all real Kiwi app tokens use the live REST
+endpoint.
 
 ## Checks
 

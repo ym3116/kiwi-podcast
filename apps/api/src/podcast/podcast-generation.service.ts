@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { PodcastEpisode } from '../types/podcast';
-import { LocalDemoChunkSource, PodcastChunkSource } from './local-demo-chunk-source';
+import { PodcastChunkSourceService } from './podcast-chunk-source.service';
 import { PodcastArtifactStore } from './podcast-artifact.store';
 import { GeneratePodcastResult, PodcastJob } from './podcast-generation.types';
 import { ScriptGeneratorService } from './script-generator.service';
@@ -9,13 +9,17 @@ import { AudioProductionService } from './audio-production.service';
 @Injectable()
 export class PodcastGenerationService {
   constructor(
-    @Inject(LocalDemoChunkSource) private readonly chunkSource: PodcastChunkSource,
+    @Inject(PodcastChunkSourceService) private readonly chunkSource: PodcastChunkSourceService,
     @Inject(PodcastArtifactStore) private readonly artifacts: PodcastArtifactStore,
     @Inject(ScriptGeneratorService) private readonly scripts: ScriptGeneratorService,
     @Inject(AudioProductionService) private readonly audioProduction: AudioProductionService,
   ) {}
 
-  async generate(classId: string, documentId: string): Promise<GeneratePodcastResult> {
+  async generate(
+    classId: string,
+    documentId: string,
+    accessToken: string,
+  ): Promise<GeneratePodcastResult> {
     const episodeId = this.episodeId(documentId);
     const existing = await this.artifacts.readJob(episodeId);
     if (existing?.status === 'ready') {
@@ -31,7 +35,7 @@ export class PodcastGenerationService {
     }
 
     try {
-      const chunks = await this.chunkSource.getChunks(classId, documentId);
+      const chunks = await this.chunkSource.getChunks(classId, documentId, accessToken);
       const script = await this.scripts.generate(chunks);
       const { scriptPath } = await this.artifacts.writeScript(episodeId, script);
       const audio = await this.audioProduction.produce(script);

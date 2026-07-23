@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { AudioStorageService } from '../storage/audio-storage.service';
 import { AudioProductionService } from './audio-production.service';
-import { LocalDemoChunkSource } from './local-demo-chunk-source';
+import { PodcastChunkSourceService } from './podcast-chunk-source.service';
 import { PodcastArtifactStore } from './podcast-artifact.store';
 import { GeneratedPodcastScript, PodcastChunkInput, PodcastTurn } from './podcast-generation.types';
 import {
@@ -24,7 +24,7 @@ export class PodcastManagementService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(PodcastService) private readonly podcasts: PodcastService,
-    @Inject(LocalDemoChunkSource) private readonly chunks: LocalDemoChunkSource,
+    @Inject(PodcastChunkSourceService) private readonly chunks: PodcastChunkSourceService,
     @Inject(ScriptGeneratorService) private readonly scripts: ScriptGeneratorService,
     @Inject(AudioProductionService) private readonly audioProduction: AudioProductionService,
     @Inject(PodcastArtifactStore) private readonly artifacts: PodcastArtifactStore,
@@ -142,16 +142,16 @@ export class PodcastManagementService {
     return { saved: true };
   }
 
-  async generateDraft(classId: string, documentId: string) {
+  async generateDraft(classId: string, documentId: string, accessToken: string) {
     const episode = await this.episode(classId, documentId);
     let source: PodcastChunkInput;
     try {
-      source = await this.chunks.getChunks(classId, documentId, {
+      source = await this.chunks.getChunks(classId, documentId, accessToken, {
         documentName: episode.sourceDocument.documentName,
       });
     } catch (error) {
       throw new HttpException(
-        { error: error instanceof Error ? error.message : 'Local chunks are not available' },
+        { error: error instanceof Error ? error.message : 'Kiwi chunks are not available' },
         HttpStatus.UNPROCESSABLE_ENTITY,
       );
     }

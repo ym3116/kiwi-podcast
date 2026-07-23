@@ -163,7 +163,7 @@ Admin: add to whitelist (approved) ──▶ You: POST /register ──▶ Admin
   "baseUrl": "http://localhost:8000",   // optional, advisory
   "status": "approved",                 // MUST be "approved" before you can register
   "description": "Kiwi Podcast external app",
-  "maxScopes": ["user:profile:read", "class:info:read", "class:enrollments:read"]
+  "maxScopes": ["user:profile:read", "class:info:read", "class:enrollments:read", "class:materials:chunks:read"]
 }
 ```
 
@@ -325,6 +325,8 @@ scopes, userId }`, and skips session checks (`src/auth/auth.guard.ts:609`).
 | `user:profile:read` | MCP resource `kiwi://users/{userId}` (`user.resource.ts:45`) |
 | `class:info:read` | MCP resource `kiwi://users/{userId}/role/{classId}` (`user.resource.ts:130`) |
 | `class:enrollments:read` | MCP resource `kiwi://users/{userId}/enrollments` (`user.resource.ts:205`) |
+| `class:materials:chunks:read` | REST `GET /api/kiwi-apps/classes/:classId/document-chunks` |
+| `context:student_learning:read` | REST `POST /api/kiwi-apps/:slug/contextual-chat` together with `llm:prompt:<promptId>` |
 | `llm:prompt:<promptId>` | MCP tool `kiwi_app_chat` for an approved prompt (`kiwi-app-chat.tool.ts:87`) |
 
 Kiwi Podcast additionally registers the free-form `podcast:manage` scope. Kiwi
@@ -334,9 +336,9 @@ alongside `class:info:read`, the verified app/class token claims, and Kiwi's
 effective class role. It is an application-owned authorization scope, not a
 built-in Kiwi MCP resource scope.
 
-> These scope checks run on Kiwi's MCP server. Iframe apps call the same MCP
-> server through Streamable HTTP at `POST /mcp`, using the scoped app token and
-> the standard MCP initialize/session flow.
+> Scope checks are shared by Kiwi's MCP tools and App REST API. Iframe apps use
+> Streamable HTTP at `POST /mcp` for MCP operations and normal bearer-authenticated
+> HTTP for App REST endpoints such as document chunks.
 
 Wildcards are supported (`class:*` matches `class:info:read`) — see
 `scope-check.ts:25`. Other endpoints (analytics, permissions) gate on **user
@@ -356,6 +358,8 @@ requests with the app token.
 | Current authenticated user (id/email/role) | app token | MCP `tools/call get_authenticated_user` |
 | User's enrolled classes | app token | MCP `resources/read kiwi://classes` |
 | Documents for a class | enrolled in class | MCP `resources/read kiwi://class/{classId}/documents` |
+| Parsed text chunks for selected documents | `class:materials:chunks:read` | REST `GET /api/kiwi-apps/classes/{classId}/document-chunks?documentIds=<id,...>&limit=200` |
+| Run an approved prompt over private learning context | `context:student_learning:read` + `llm:prompt:<id>` | REST `POST /api/kiwi-apps/{slug}/contextual-chat`; user/class come from the app token |
 | Use Kiwi's AI (streaming) | _(none; host‑proxied)_ | bridge `kiwi:askAI` |
 | Use Kiwi's AI (one shot, with token) | app token | MCP `tools/call chat { input }` |
 | User profile | `user:profile:read` | MCP resource `kiwi://users/{userId}` |
@@ -402,6 +406,29 @@ const res = await fetch(`${KIWI_ORIGIN}/api/permissions/class-role?userId=${user
   headers: { Authorization: `Bearer ${appToken}` },
 });
 ```
+
+Document chunks use document IDs, not material IDs. The request has no body:
+
+```js
+const params = new URLSearchParams({
+  documentIds: ['doc-1', 'doc-2'].join(','),
+  limit: '200',
+});
+const res = await fetch(
+  `${KIWI_ORIGIN}/api/kiwi-apps/classes/${classId}/document-chunks?${params}`,
+  { headers: { Authorization: `Bearer ${appToken}` } },
+);
+const page = await res.json();
+// { classId, documents: [{ documentId, fileName, totalChunks, chunks }],
+//   nextCursor, hasMore }
+```
+
+When `hasMore` is true, repeat the same filtered request with
+`cursor=nextCursor`. Treat the cursor as opaque. Use IDs from the canonical
+class documents resource rather than requesting the endpoint without a filter:
+the backend currently tracks a known issue where all variants under a material
+can include answer-key documents. Apps should keep raw chunks in memory only
+and persist derived artifacts or compact source counts, not the chunk text.
 
 ### 8.3 MCP over Streamable HTTP
 
@@ -532,3 +559,8 @@ Register with `appType: "full"` and `mcpServerUrl`. Kiwi's agent can then call
    `kiwi:askAI` to `/chat/stream` (admin‑guarded, `{ input, image }`) instead of
    the student agent (`POST /student/chat/v2`, `UnifiedChatRequest`). Point the
    host proxy at the student endpoint so `kiwi:askAI` works for non‑admins. See §8.1.
+8. **Document chunk variants need tighter backend gating.** The App REST chunks
+   endpoint can return multiple documents under one material, including answer
+   keys. Until Kiwi issue #219 is resolved, external apps should first obtain
+   canonical student-facing document IDs and always pass them through the
+   `documentIds` filter.

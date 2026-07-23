@@ -88,4 +88,118 @@ describe('PersonalPodcastService audio ownership', () => {
     expect(audioStorage.delete).not.toHaveBeenCalled();
     expect(prisma.personalPodcast.delete).not.toHaveBeenCalled();
   });
+
+  it('uses the current token for live material validation and background chunk retrieval', async () => {
+    const now = new Date('2026-07-23T00:00:00.000Z');
+    const created = {
+      id: 'podcast-live',
+      classId: 'class-1',
+      ownerUserId: 'student-1',
+      prompt: 'Explain the live lecture material',
+      durationMinutes: 5,
+      difficulty: 'intermediate',
+      selectedMaterials: [],
+      status: 'queued',
+      progressPercent: 5,
+      statusMessage: 'Waiting to start',
+      title: null,
+      summary: null,
+      turns: null,
+      audioStorageKey: null,
+      errorMessage: null,
+      startedAt: null,
+      completedAt: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const prisma = {
+      personalPodcast: {
+        create: vi.fn(async ({ data }) => ({ ...created, ...data })),
+        findUniqueOrThrow: vi.fn(async () => ({
+          ...created,
+          selectedMaterials: [{ id: 'doc-1' }],
+        })),
+        update: vi.fn(async () => created),
+      },
+    };
+    const source = {
+      listMaterials: vi.fn().mockResolvedValue([{
+        id: 'doc-1',
+        documentId: 'doc-1',
+        documentName: 'Lecture.pdf',
+        materialType: 'lecture',
+        chunkCount: 1,
+        preview: 'Live text',
+      }]),
+      getCombinedChunks: vi.fn().mockResolvedValue({
+        classId: 'class-1',
+        documentId: 'doc-1',
+        documentName: 'Lecture.pdf',
+        chunks: [{ text: 'Live text' }],
+        sourceMetadata: [],
+      }),
+    };
+    const scripts = {
+      generatePersonal: vi.fn().mockResolvedValue({
+        title: 'Live podcast',
+        summary: 'Summary',
+        turns: [{ speaker: 'HOST_A', text: 'Hello.' }],
+      }),
+    };
+    const audio = { produce: vi.fn().mockResolvedValue(Buffer.from([1])) };
+    const storage = {
+      upload: vi.fn().mockResolvedValue(undefined),
+      delete: vi.fn().mockResolvedValue(undefined),
+    };
+    const subject = new PersonalPodcastService(
+      prisma as never,
+      source as never,
+      scripts as never,
+      audio as never,
+      storage as never,
+    );
+
+    await subject.create('class-1', {
+      ownerUserId: 'student-1',
+      prompt: 'Explain the live lecture material',
+      materialIds: ['doc-1'],
+      durationMinutes: 5,
+      difficulty: 'intermediate',
+    }, 'fresh-token');
+
+    expect(source.listMaterials).toHaveBeenCalledWith('class-1', 'fresh-token');
+    await vi.waitFor(() => {
+      expect(source.getCombinedChunks).toHaveBeenCalledWith(
+        'class-1',
+        ['doc-1'],
+        'fresh-token',
+      );
+    });
+    expect(prisma.personalPodcast.create.mock.calls[0][0].data).not.toHaveProperty('accessToken');
+    expect(prisma.personalPodcast.create.mock.calls[0][0].data.selectedMaterials).toEqual([
+      expect.objectContaining({ documentId: 'doc-1', preview: '' }),
+    ]);
+    expect(JSON.stringify(prisma.personalPodcast.create.mock.calls[0][0].data)).not.toContain(
+      'Live text',
+    );
+  });
+
+  it('maps a missing Kiwi chunk scope to a clear forbidden response', async () => {
+    const subject = new PersonalPodcastService(
+      {} as never,
+      {
+        listMaterials: vi.fn().mockRejectedValue(
+          new Error('Kiwi denied document chunk access: Missing required scope'),
+        ),
+      } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+
+    await expect(subject.listMaterials('class-1', 'token')).rejects.toMatchObject({
+      status: 403,
+      response: { error: 'Kiwi denied document chunk access: Missing required scope' },
+    });
+  });
 });

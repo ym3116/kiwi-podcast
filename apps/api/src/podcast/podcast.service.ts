@@ -36,8 +36,8 @@ export class PodcastService {
     }
   }
 
-  async generateEpisode(classId: string, documentId: string) {
-    return this.generationService.generate(classId, documentId);
+  async generateEpisode(classId: string, documentId: string, accessToken: string) {
+    return this.generationService.generate(classId, documentId, accessToken);
   }
 
   async getGenerationStatus(classId: string, documentId: string) {

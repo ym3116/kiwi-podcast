@@ -61,8 +61,9 @@ export class PodcastManagementController {
     @Param('documentId') documentId: string,
     @Headers('authorization') authorization?: string,
   ) {
-    await this.auth.authorize(classId, this.token(authorization));
-    return this.management.generateDraft(classId, documentId);
+    const token = this.token(authorization);
+    await this.auth.authorize(classId, token);
+    return this.management.generateDraft(classId, documentId, token);
   }
 
   @Post('episodes/:documentId/render')

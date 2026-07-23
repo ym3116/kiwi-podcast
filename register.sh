@@ -31,7 +31,7 @@ ADMIN_TOKEN="${ADMIN_TOKEN:-}"                  # admin JWT (for whitelist + ena
 KIWI_COOKIE="${KIWI_COOKIE:-}"                  # browser session cookie, e.g. connect.sid=s%3A...
 CLASS_ID="${CLASS_ID:-}"                         # optional: enable the app in this class
 
-SCOPES='["user:profile:read","class:info:read","class:enrollments:read","podcast:manage"]'
+SCOPES='["user:profile:read","class:info:read","class:enrollments:read","class:materials:chunks:read","podcast:manage"]'
 
 COOKIE_ARGS=()
 if [ -n "$KIWI_COOKIE" ]; then

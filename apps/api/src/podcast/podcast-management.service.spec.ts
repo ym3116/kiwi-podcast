@@ -86,14 +86,50 @@ describe('PodcastManagementService', () => {
     expect(reset).not.toHaveProperty('voiceOverrides');
     expect(prisma.generationJob.deleteMany).toHaveBeenCalledWith({ where: { episodeId: 'episode-doc-1' } });
   });
+
+  it('forwards the current app token when generating a managed draft', async () => {
+    const prisma = basePrisma();
+    prisma.podcastEpisode.findFirstOrThrow.mockResolvedValue(episode());
+    const chunks = {
+      getChunks: vi.fn().mockResolvedValue({
+        classId: 'class-1',
+        documentId: 'doc-1',
+        documentName: 'Canonical Kiwi document',
+        chunks: [{ text: 'Live Kiwi text.' }],
+      }),
+    };
+    const scripts = {
+      generate: vi.fn().mockResolvedValue({
+        title: 'Live draft',
+        summary: 'Summary',
+        durationTargetMinutes: 10,
+        turns: turns(),
+      }),
+    };
+    const service = management(prisma, { delete: vi.fn() }, chunks, scripts);
+
+    await service.generateDraft('class-1', 'doc-1', 'fresh-token');
+
+    expect(chunks.getChunks).toHaveBeenCalledWith(
+      'class-1',
+      'doc-1',
+      'fresh-token',
+      { documentName: 'Canonical Kiwi document' },
+    );
+  });
 });
 
-function management(prisma: ReturnType<typeof basePrisma>, storage: { delete: ReturnType<typeof vi.fn> } = { delete: vi.fn() }) {
+function management(
+  prisma: ReturnType<typeof basePrisma>,
+  storage: { delete: ReturnType<typeof vi.fn> } = { delete: vi.fn() },
+  chunks: object = {},
+  scripts: object = {},
+) {
   return new PodcastManagementService(
     prisma as never,
     {} as never,
-    {} as never,
-    {} as never,
+    chunks as never,
+    scripts as never,
     {} as never,
     {} as never,
     storage as never,

@@ -15,6 +15,8 @@ import { AUDIO_S3_CLIENT, AudioStorageService, createAudioS3Client } from './sto
 import { PodcastManagementController } from './podcast/podcast-management.controller';
 import { PodcastManagementService } from './podcast/podcast-management.service';
 import { PodcastManagementAuthService } from './podcast/podcast-management-auth.service';
+import { KiwiDocumentChunkSource } from './podcast/kiwi-document-chunk-source';
+import { PodcastChunkSourceService } from './podcast/podcast-chunk-source.service';
 
 @Module({
   imports: [DatabaseModule],
@@ -22,6 +24,8 @@ import { PodcastManagementAuthService } from './podcast/podcast-management-auth.
   providers: [
     KiwiMcpClient,
     LocalDemoChunkSource,
+    KiwiDocumentChunkSource,
+    PodcastChunkSourceService,
     PodcastArtifactStore,
     PodcastGenerationService,
     PodcastService,
