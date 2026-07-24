@@ -53,12 +53,15 @@ export class PodcastService {
   }
 
   private async withGeneratedArtifacts(response: PodcastResponse): Promise<PodcastResponse> {
+    const episodes = await Promise.all(
+      response.episodes.map((episode) =>
+        this.generationService.overlayEpisode(response.podcast.classId, episode),
+      ),
+    );
     return {
       ...response,
-      episodes: await Promise.all(
-        response.episodes.map((episode) =>
-          this.generationService.overlayEpisode(response.podcast.classId, episode),
-        ),
+      episodes: episodes.filter(
+        (episode) => episode.status === 'ready' && Boolean(episode.audioUrl),
       ),
     };
   }

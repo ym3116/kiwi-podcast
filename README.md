@@ -170,7 +170,8 @@ The Podcast API treats the Kiwi app token, rather than browser-supplied IDs, as
 the source of truth for identity and class access:
 
 - Published **Class Podcast** episodes are shared with authenticated members of
-  that class.
+  that class. Unpublished episode rows, draft titles, scripts, and preview audio
+  are omitted from the class feed.
 - **My Podcasts** rows and audio are filtered by the token's verified `sub`
   user ID and `classId`. Personal routes do not accept `ownerUserId`.
 - **Manage** requires `class:info:read`, `podcast:manage`, and an effective Kiwi

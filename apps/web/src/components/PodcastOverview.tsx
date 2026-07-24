@@ -53,7 +53,7 @@ export function PodcastOverview({
         {data.episodes.length === 0 ? (
           <div className="empty-state compact-empty">
             <FileText size={28} />
-            <p>No lecture documents are available for podcast episodes yet.</p>
+            <p>No class podcast episodes have been published yet.</p>
           </div>
         ) : (
           <div className="podcast-list">

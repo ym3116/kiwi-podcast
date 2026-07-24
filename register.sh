@@ -94,7 +94,7 @@ REG_RESPONSE=$(curl -sS -X POST "$KIWI/api/kiwi-apps/register" \
         \"uiName\": \"kiwi-podcast\",
         \"uiUrl\": \"$APP_URL\",
         \"placement\": \"class-tab\",
-        \"allowedRoles\": [\"student\", \"ta\", \"instructor\", \"admin\"],
+        \"allowedRoles\": [\"student\", \"ta\", \"professor\", \"instructor\", \"admin\"],
         \"tabOrder\": 0
       }
     ]

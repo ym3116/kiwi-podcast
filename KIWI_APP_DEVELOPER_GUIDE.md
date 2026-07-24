@@ -194,7 +194,7 @@ the whitelist + secret. See `kiwi-app.controller.ts:119` and
       "uiName": "kiwi-podcast",
       "uiUrl": "http://localhost:8000",
       "placement": "class-tab",              // class-tab | admin-panel | modal | dashboard-widget
-      "allowedRoles": ["student", "ta", "instructor", "admin"],
+      "allowedRoles": ["student", "ta", "professor", "instructor", "admin"],
       "tabOrder": 0
     }
   ],
