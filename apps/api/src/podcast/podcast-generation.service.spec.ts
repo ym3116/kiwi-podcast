@@ -32,7 +32,9 @@ describe('PodcastGenerationService', () => {
     expect(store.statuses).toEqual(['generating', 'ready']);
     expect(getChunks).toHaveBeenCalledWith('class-1', 'doc-1', 'token');
     expect(result.job.status).toBe('ready');
-    expect(result.episode?.audioUrl).toContain('/api/podcast/audio/episode-doc-1');
+    expect(result.episode?.audioUrl).toContain(
+      '/api/podcast/classes/class-1/audio/episode-doc-1',
+    );
   });
 
   it('marks failed jobs when generation throws', async () => {
@@ -89,7 +91,7 @@ describe('PodcastGenerationService', () => {
       {} as never,
     );
 
-    const episode = await service.overlayEpisode({
+    const episode = await service.overlayEpisode('class-1', {
       id: 'episode-doc-1', documentId: 'doc-1', title: 'Episode', lectureNumber: 1,
       documentName: 'Lecture', materialType: 'lecture', durationLabel: 'Not published', script: '', status: 'placeholder',
     });
@@ -105,7 +107,7 @@ function inMemoryStore() {
   const store = {
     statuses,
     nextBeginStarted: true,
-    readJob: vi.fn(async (episodeId: string) => jobs.get(episodeId) ?? null),
+    readJob: vi.fn(async (_classId: string, episodeId: string) => jobs.get(episodeId) ?? null),
     beginJob: vi.fn(async (episodeId: string, patch: any) => {
       const job = {
         episodeId,

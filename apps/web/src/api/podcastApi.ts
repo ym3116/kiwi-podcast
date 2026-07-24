@@ -50,16 +50,16 @@ export async function fetchCreatorMaterials(classId: string, token: string) {
   );
 }
 
-export async function fetchMyPodcasts(classId: string, userId: string, token: string) {
+export async function fetchMyPodcasts(classId: string, token: string) {
   return apiJson<{ podcasts: PersonalPodcast[] }>(
-    `/api/podcast/classes/${encodeURIComponent(classId)}/my-podcasts?ownerUserId=${encodeURIComponent(userId)}`,
+    `/api/podcast/classes/${encodeURIComponent(classId)}/my-podcasts`,
     token,
   );
 }
 
-export async function fetchMyPodcast(classId: string, podcastId: string, userId: string, token: string) {
+export async function fetchMyPodcast(classId: string, podcastId: string, token: string) {
   return apiJson<PersonalPodcast>(
-    `/api/podcast/classes/${encodeURIComponent(classId)}/my-podcasts/${encodeURIComponent(podcastId)}?ownerUserId=${encodeURIComponent(userId)}`,
+    `/api/podcast/classes/${encodeURIComponent(classId)}/my-podcasts/${encodeURIComponent(podcastId)}`,
     token,
   );
 }
@@ -67,7 +67,7 @@ export async function fetchMyPodcast(classId: string, podcastId: string, userId:
 export async function createMyPodcast(
   classId: string,
   token: string,
-  input: { ownerUserId: string; prompt: string; materialIds: string[]; durationMinutes: 5 | 10 | 15; difficulty: PodcastDifficulty },
+  input: { prompt: string; materialIds: string[]; durationMinutes: 5 | 10 | 15; difficulty: PodcastDifficulty },
 ) {
   return apiJson<PersonalPodcast>(
     `/api/podcast/classes/${encodeURIComponent(classId)}/my-podcasts`,
@@ -76,20 +76,40 @@ export async function createMyPodcast(
   );
 }
 
-export async function retryMyPodcast(classId: string, podcastId: string, userId: string, token: string) {
+export async function retryMyPodcast(classId: string, podcastId: string, token: string) {
   return apiJson<PersonalPodcast>(
     `/api/podcast/classes/${encodeURIComponent(classId)}/my-podcasts/${encodeURIComponent(podcastId)}/retry`,
     token,
-    { method: 'POST', body: JSON.stringify({ ownerUserId: userId }) },
+    { method: 'POST' },
   );
 }
 
-export async function deleteMyPodcast(classId: string, podcastId: string, userId: string, token: string) {
+export async function deleteMyPodcast(classId: string, podcastId: string, token: string) {
   return apiJson<{ deleted: true; id: string }>(
     `/api/podcast/classes/${encodeURIComponent(classId)}/my-podcasts/${encodeURIComponent(podcastId)}`,
     token,
-    { method: 'DELETE', body: JSON.stringify({ ownerUserId: userId }) },
+    { method: 'DELETE' },
   );
+}
+
+export async function fetchPodcastAudio(audioUrl: string, token: string) {
+  const configuredBase = apiBase() || window.location.origin;
+  const apiUrl = new URL(configuredBase, window.location.origin);
+  const resolvedUrl = new URL(audioUrl, `${apiUrl.origin}/`);
+  if (
+    resolvedUrl.origin !== apiUrl.origin
+    || !resolvedUrl.pathname.startsWith('/api/podcast/')
+  ) {
+    throw new Error('Refused to send the Kiwi token to an untrusted audio URL');
+  }
+  const response = await fetch(resolvedUrl.toString(), {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.error || `Podcast audio returned ${response.status}`);
+  }
+  return response.blob();
 }
 
 const managePath = (classId: string) => `/api/podcast/classes/${encodeURIComponent(classId)}/manage`;

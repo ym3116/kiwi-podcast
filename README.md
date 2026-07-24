@@ -164,6 +164,32 @@ management API after receiving `kiwi:context` and `kiwi:appToken`; the
 **Manage** tab appears only when the API verifies a global admin or active class
 professor/instructor. Students and TAs receive `403`, so the tab remains hidden.
 
+## Access Control
+
+The Podcast API treats the Kiwi app token, rather than browser-supplied IDs, as
+the source of truth for identity and class access:
+
+- Published **Class Podcast** episodes are shared with authenticated members of
+  that class.
+- **My Podcasts** rows and audio are filtered by the token's verified `sub`
+  user ID and `classId`. Personal routes do not accept `ownerUserId`.
+- **Manage** requires `class:info:read`, `podcast:manage`, and an effective Kiwi
+  role of admin, professor, or instructor.
+- Class and personal audio endpoints require the bearer token. The web app
+  downloads protected MP3s with `fetch`, creates one temporary browser Blob URL,
+  and revokes it when the track changes.
+
+The API verifies real app tokens through Kiwi's authenticated
+`get_authenticated_user` MCP tool, checks the token app/class/scopes, and
+confirms the user's effective class role. Missing or invalid authentication
+returns `401`; a valid token without class or scope access returns `403`; asking
+for another user's personal podcast returns `404`.
+
+Standalone Simulator mode keeps its exact demo token, but that token is limited
+to `PODCAST_SIMULATOR_CLASS_ID`, `PODCAST_SIMULATOR_USER_ID`, local fixture
+materials, and student-level scopes. It cannot read live class podcast,
+generation-status, class-audio, or management endpoints.
+
 ## Class Podcast Management
 
 The real-Kiwi **Manage** tab synchronizes eligible class-material documents from
@@ -235,7 +261,7 @@ curl -H "Authorization: Bearer $KIWI_APP_TOKEN" \
 Check an episode's published/generation status:
 
 ```bash
-curl -H "Authorization: Bearer local-dev-token" \
+curl -H "Authorization: Bearer $KIWI_APP_TOKEN" \
   http://localhost:8010/api/podcast/classes/1ef1daa0-6f00-4c52-b13f-fa85b65b3e31/episodes/49d054f2-2a9c-44f1-9a9f-43d67d77a01a/status
 ```
 

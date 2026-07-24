@@ -51,7 +51,6 @@ export type PersonalPodcastStatus =
 export interface PersonalPodcast {
   id: string;
   classId: string;
-  ownerUserId: string;
   prompt: string;
   title: string;
   summary: string;

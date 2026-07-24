@@ -44,8 +44,8 @@ export class PodcastService {
     return this.generationService.getStatus(classId, documentId);
   }
 
-  getAudioStorageKey(episodeId: string): Promise<string | null> {
-    return this.generationService.getAudioStorageKey(episodeId);
+  getAudioStorageKey(classId: string, episodeId: string): Promise<string | null> {
+    return this.generationService.getAudioStorageKey(classId, episodeId);
   }
 
   private shouldFallback(message: string): boolean {
@@ -56,7 +56,9 @@ export class PodcastService {
     return {
       ...response,
       episodes: await Promise.all(
-        response.episodes.map((episode) => this.generationService.overlayEpisode(episode)),
+        response.episodes.map((episode) =>
+          this.generationService.overlayEpisode(response.podcast.classId, episode),
+        ),
       ),
     };
   }

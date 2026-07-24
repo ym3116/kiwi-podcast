@@ -17,9 +17,9 @@ export class PodcastArtifactStore {
     @Inject(AudioStorageService) private readonly audioStorage: AudioStorageService,
   ) {}
 
-  async readJob(episodeId: string): Promise<PodcastJob | null> {
+  async readJob(classId: string, episodeId: string): Promise<PodcastJob | null> {
     const job = await this.prisma.generationJob.findFirst({
-      where: { episodeId },
+      where: { episodeId, classId },
       orderBy: { createdAt: 'desc' },
       include: { audioAsset: true },
     });
@@ -34,9 +34,9 @@ export class PodcastArtifactStore {
     return job ? this.toPodcastJob(job) : null;
   }
 
-  async readPublishedJob(episodeId: string): Promise<PodcastJob | null> {
-    const episode = await this.prisma.podcastEpisode.findUnique({
-      where: { episodeId },
+  async readPublishedJob(classId: string, episodeId: string): Promise<PodcastJob | null> {
+    const episode = await this.prisma.podcastEpisode.findFirst({
+      where: { episodeId, classId },
       include: { publishedJob: { include: { audioAsset: true } } },
     });
     return episode?.publishedJob ? this.toPodcastJob(episode.publishedJob) : null;
@@ -58,7 +58,7 @@ export class PodcastArtifactStore {
     },
   ): Promise<{ job: PodcastJob; started: boolean }> {
     const active = await this.prisma.generationJob.findFirst({
-      where: { episodeId, status: 'generating' },
+      where: { episodeId, classId: patch.classId, status: 'generating' },
       orderBy: { createdAt: 'desc' },
       include: { audioAsset: true },
     });
@@ -88,7 +88,7 @@ export class PodcastArtifactStore {
     } catch (error) {
       if (this.isUniqueConstraint(error)) {
         const concurrent = await this.prisma.generationJob.findFirstOrThrow({
-          where: { episodeId, status: 'generating' },
+          where: { episodeId, classId: patch.classId, status: 'generating' },
           orderBy: { createdAt: 'desc' },
           include: { audioAsset: true },
         });
@@ -109,11 +109,11 @@ export class PodcastArtifactStore {
     await this.ensureEpisode(episodeId, patch.classId, patch.documentId);
     const current =
       (await this.prisma.generationJob.findFirst({
-        where: { episodeId, status: 'generating' },
+        where: { episodeId, classId: patch.classId, status: 'generating' },
         orderBy: { createdAt: 'desc' },
       })) ??
       (await this.prisma.generationJob.findFirst({
-        where: { episodeId },
+        where: { episodeId, classId: patch.classId },
         orderBy: { createdAt: 'desc' },
       }));
 
@@ -298,9 +298,9 @@ export class PodcastArtifactStore {
     });
   }
 
-  async audioStorageKey(episodeId: string): Promise<string | null> {
-    const episode = await this.prisma.podcastEpisode.findUnique({
-      where: { episodeId },
+  async audioStorageKey(classId: string, episodeId: string): Promise<string | null> {
+    const episode = await this.prisma.podcastEpisode.findFirst({
+      where: { episodeId, classId },
       select: { publishedJob: { select: { audioAsset: { select: { storageKey: true } } } } },
     });
     return episode?.publishedJob?.audioAsset?.storageKey ?? null;
@@ -314,9 +314,9 @@ export class PodcastArtifactStore {
     return asset?.storageKey ?? null;
   }
 
-  async titleOverride(episodeId: string): Promise<string | null> {
-    const episode = await this.prisma.podcastEpisode.findUnique({
-      where: { episodeId },
+  async titleOverride(classId: string, episodeId: string): Promise<string | null> {
+    const episode = await this.prisma.podcastEpisode.findFirst({
+      where: { episodeId, classId },
       select: { titleOverride: true },
     });
     return episode?.titleOverride ?? null;
@@ -377,7 +377,12 @@ export class PodcastArtifactStore {
 
   private async ensureEpisode(episodeId: string, classId: string, documentId: string) {
     const existing = await this.prisma.podcastEpisode.findUnique({ where: { episodeId } });
-    if (existing) return existing;
+    if (existing) {
+      if (existing.classId !== classId) {
+        throw new Error('Podcast episode identifier belongs to a different class');
+      }
+      return existing;
+    }
 
     await this.prisma.podcastClass.upsert({
       where: { classId },
@@ -441,7 +446,10 @@ export class PodcastArtifactStore {
       draftRevision: job.draftRevision ?? undefined,
       durationSeconds: job.durationSeconds ?? undefined,
       audioStorageKey: job.audioAsset?.storageKey,
-      audioUrl: job.status === 'ready' ? this.audioUrl(job.episodeId, job.id) : undefined,
+      audioUrl:
+        job.status === 'ready'
+          ? this.audioUrl(job.classId, job.episodeId, job.id)
+          : undefined,
       generatedAt: job.status === 'ready' ? job.finishedAt?.toISOString() : undefined,
       updatedAt: job.updatedAt.toISOString(),
       errorMessage: job.errorMessage ?? undefined,
@@ -452,13 +460,13 @@ export class PodcastArtifactStore {
     return status;
   }
 
-  private audioUrl(episodeId: string, jobId?: string): string {
+  private audioUrl(classId: string, episodeId: string, jobId?: string): string {
     const base = (process.env.PODCAST_PUBLIC_API_BASE ?? 'http://localhost:8010').replace(
       /\/$/,
       '',
     );
     const suffix = jobId ? `?v=${encodeURIComponent(jobId)}` : '';
-    return `${base}/api/podcast/audio/${encodeURIComponent(episodeId)}${suffix}`;
+    return `${base}/api/podcast/classes/${encodeURIComponent(classId)}/audio/${encodeURIComponent(episodeId)}${suffix}`;
   }
 
   private isUniqueConstraint(error: unknown): boolean {

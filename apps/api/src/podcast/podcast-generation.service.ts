@@ -21,7 +21,7 @@ export class PodcastGenerationService {
     accessToken: string,
   ): Promise<GeneratePodcastResult> {
     const episodeId = this.episodeId(documentId);
-    const existing = await this.artifacts.readJob(episodeId);
+    const existing = await this.artifacts.readJob(classId, episodeId);
     if (existing?.status === 'ready') {
       return { job: existing, episode: await this.episodeFromJob(existing) };
     }
@@ -48,7 +48,7 @@ export class PodcastGenerationService {
         status: 'ready',
         scriptPath,
         audioStorageKey: storageKey,
-        audioUrl: this.audioUrl(episodeId),
+        audioUrl: this.audioUrl(classId, episodeId),
         generatedAt,
       });
 
@@ -66,7 +66,7 @@ export class PodcastGenerationService {
 
   async getStatus(classId: string, documentId: string): Promise<PodcastJob> {
     const episodeId = this.episodeId(documentId);
-    const job = await this.artifacts.readJob(episodeId);
+    const job = await this.artifacts.readJob(classId, episodeId);
     if (job) return job;
 
     return {
@@ -82,10 +82,10 @@ export class PodcastGenerationService {
     await this.artifacts.syncCatalog(response);
   }
 
-  async overlayEpisode(episode: PodcastEpisode): Promise<PodcastEpisode> {
+  async overlayEpisode(classId: string, episode: PodcastEpisode): Promise<PodcastEpisode> {
     const [job, titleOverride] = await Promise.all([
-      this.artifacts.readPublishedJob(episode.id),
-      this.artifacts.titleOverride(episode.id),
+      this.artifacts.readPublishedJob(classId, episode.id),
+      this.artifacts.titleOverride(classId, episode.id),
     ]);
     if (!job) {
       return {
@@ -123,8 +123,8 @@ export class PodcastGenerationService {
     };
   }
 
-  getAudioStorageKey(episodeId: string): Promise<string | null> {
-    return this.artifacts.audioStorageKey(episodeId);
+  getAudioStorageKey(classId: string, episodeId: string): Promise<string | null> {
+    return this.artifacts.audioStorageKey(classId, episodeId);
   }
 
   private async episodeFromJob(job: PodcastJob): Promise<PodcastEpisode | undefined> {
@@ -153,12 +153,12 @@ export class PodcastGenerationService {
     return `episode-${documentId}`;
   }
 
-  private audioUrl(episodeId: string): string {
+  private audioUrl(classId: string, episodeId: string): string {
     const base = (process.env.PODCAST_PUBLIC_API_BASE ?? 'http://localhost:8010').replace(
       /\/$/,
       '',
     );
-    return `${base}/api/podcast/audio/${encodeURIComponent(episodeId)}`;
+    return `${base}/api/podcast/classes/${encodeURIComponent(classId)}/audio/${encodeURIComponent(episodeId)}`;
   }
 
   private durationLabel(durationSeconds?: number): string {

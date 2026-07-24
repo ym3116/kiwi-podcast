@@ -9,7 +9,6 @@ import {
   Patch,
   Post,
   Res,
-  UnauthorizedException,
 } from '@nestjs/common';
 import { AudioStorageService } from '../storage/audio-storage.service';
 import { PodcastManagementAuthService } from './podcast-management-auth.service';
@@ -29,9 +28,8 @@ export class PodcastManagementController {
     @Param('classId') classId: string,
     @Headers('authorization') authorization?: string,
   ) {
-    const token = this.token(authorization);
-    await this.auth.authorize(classId, token);
-    return this.management.getState(classId, token);
+    const principal = await this.auth.authorize(classId, authorization);
+    return this.management.getState(classId, principal.accessToken);
   }
 
   @Patch('defaults')
@@ -40,7 +38,7 @@ export class PodcastManagementController {
     @Body() body: unknown,
     @Headers('authorization') authorization?: string,
   ) {
-    await this.auth.authorize(classId, this.token(authorization));
+    await this.auth.authorize(classId, authorization);
     return this.management.updateDefaults(classId, body);
   }
 
@@ -51,7 +49,7 @@ export class PodcastManagementController {
     @Body() body: UpdateManagedEpisodeInput,
     @Headers('authorization') authorization?: string,
   ) {
-    await this.auth.authorize(classId, this.token(authorization));
+    await this.auth.authorize(classId, authorization);
     return this.management.updateEpisode(classId, documentId, body);
   }
 
@@ -61,9 +59,8 @@ export class PodcastManagementController {
     @Param('documentId') documentId: string,
     @Headers('authorization') authorization?: string,
   ) {
-    const token = this.token(authorization);
-    await this.auth.authorize(classId, token);
-    return this.management.generateDraft(classId, documentId, token);
+    const principal = await this.auth.authorize(classId, authorization);
+    return this.management.generateDraft(classId, documentId, principal.accessToken);
   }
 
   @Post('episodes/:documentId/render')
@@ -72,7 +69,7 @@ export class PodcastManagementController {
     @Param('documentId') documentId: string,
     @Headers('authorization') authorization?: string,
   ) {
-    await this.auth.authorize(classId, this.token(authorization));
+    await this.auth.authorize(classId, authorization);
     return this.management.startRender(classId, documentId);
   }
 
@@ -82,7 +79,7 @@ export class PodcastManagementController {
     @Param('jobId') jobId: string,
     @Headers('authorization') authorization?: string,
   ) {
-    await this.auth.authorize(classId, this.token(authorization));
+    await this.auth.authorize(classId, authorization);
     return this.management.getJob(classId, jobId);
   }
 
@@ -93,11 +90,12 @@ export class PodcastManagementController {
     @Headers('authorization') authorization: string | undefined,
     @Res() response: any,
   ) {
-    await this.auth.authorize(classId, this.token(authorization));
+    await this.auth.authorize(classId, authorization);
     const key = await this.management.jobAudioKey(classId, jobId);
     const audio = await this.audioStorage.stream(key);
     response.setHeader('Content-Type', audio.metadata.contentType);
     if (audio.metadata.contentLength) response.setHeader('Content-Length', audio.metadata.contentLength);
+    response.setHeader('Cache-Control', 'private, no-store');
     audio.body.on('error', () => response.end()).pipe(response);
   }
 
@@ -108,7 +106,7 @@ export class PodcastManagementController {
     @Body('jobId') jobId: string,
     @Headers('authorization') authorization?: string,
   ) {
-    await this.auth.authorize(classId, this.token(authorization));
+    await this.auth.authorize(classId, authorization);
     return this.management.publish(classId, documentId, jobId);
   }
 
@@ -118,7 +116,7 @@ export class PodcastManagementController {
     @Param('documentId') documentId: string,
     @Headers('authorization') authorization?: string,
   ) {
-    await this.auth.authorize(classId, this.token(authorization));
+    await this.auth.authorize(classId, authorization);
     return this.management.resetEpisode(classId, documentId);
   }
 
@@ -129,16 +127,12 @@ export class PodcastManagementController {
     @Headers('authorization') authorization: string | undefined,
     @Res() response: any,
   ) {
-    await this.auth.authorize(classId, this.token(authorization));
+    await this.auth.authorize(classId, authorization);
     const wav = await this.management.previewVoice(body);
     response.setHeader('Content-Type', 'audio/wav');
     response.setHeader('Content-Length', wav.byteLength);
+    response.setHeader('Cache-Control', 'private, no-store');
     response.send(wav);
   }
 
-  private token(authorization?: string): string {
-    const match = authorization?.match(/^Bearer\s+(.+)$/i);
-    if (!match?.[1]) throw new UnauthorizedException('Missing Authorization bearer token');
-    return match[1];
-  }
 }

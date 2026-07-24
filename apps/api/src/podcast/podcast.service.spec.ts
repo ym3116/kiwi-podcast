@@ -6,7 +6,7 @@ import { PodcastService } from './podcast.service';
 function generationServiceMock() {
   return {
     syncPodcastCatalog: vi.fn(async () => undefined),
-    overlayEpisode: vi.fn(async (episode) => episode),
+    overlayEpisode: vi.fn(async (_classId, episode) => episode),
   } as unknown as PodcastGenerationService;
 }
 

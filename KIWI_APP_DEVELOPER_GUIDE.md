@@ -336,6 +336,11 @@ alongside `class:info:read`, the verified app/class token claims, and Kiwi's
 effective class role. It is an application-owned authorization scope, not a
 built-in Kiwi MCP resource scope.
 
+For ordinary Podcast access, the external API also verifies the token through
+Kiwi before deriving its user and class. Published class episodes are shared
+within that verified class, while personal podcast queries and protected audio
+are bound to the verified token subject rather than a browser-provided owner ID.
+
 > Scope checks are shared by Kiwi's MCP tools and App REST API. Iframe apps use
 > Streamable HTTP at `POST /mcp` for MCP operations and normal bearer-authenticated
 > HTTP for App REST endpoints such as document chunks.

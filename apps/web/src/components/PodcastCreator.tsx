@@ -17,7 +17,6 @@ import { DemoMaterial, PersonalPodcast, PodcastDifficulty } from '../types/podca
 
 interface Props {
   classId: string;
-  userId: string;
   token: string;
   onCancel: () => void;
   onComplete: () => void;
@@ -32,7 +31,7 @@ const examples = [
 ];
 const steps = ['Idea', 'Materials', 'Length', 'Difficulty', 'Generate'];
 
-export function PodcastCreator({ classId, userId, token, onCancel, onComplete, onPlayReady, onContextChange }: Props) {
+export function PodcastCreator({ classId, token, onCancel, onComplete, onPlayReady, onContextChange }: Props) {
   const [step, setStep] = useState(0);
   const [prompt, setPrompt] = useState('');
   const [materials, setMaterials] = useState<DemoMaterial[]>([]);
@@ -90,13 +89,13 @@ export function PodcastCreator({ classId, userId, token, onCancel, onComplete, o
     if (!podcast || podcast.status === 'ready' || podcast.status === 'failed') return;
     const timer = window.setInterval(async () => {
       try {
-        setPodcast(await fetchMyPodcast(classId, podcast.id, userId, token));
+        setPodcast(await fetchMyPodcast(classId, podcast.id, token));
       } catch (error) {
         setError(error instanceof Error ? error.message : 'Unable to refresh progress');
       }
     }, 2000);
     return () => window.clearInterval(timer);
-  }, [classId, podcast, token, userId]);
+  }, [classId, podcast, token]);
 
   useEffect(() => {
     if (!podcast) return;
@@ -112,7 +111,6 @@ export function PodcastCreator({ classId, userId, token, onCancel, onComplete, o
     setError(null);
     try {
       const created = await createMyPodcast(classId, token, {
-        ownerUserId: userId,
         prompt: prompt.trim(),
         materialIds: selected,
         durationMinutes: duration,
@@ -139,7 +137,7 @@ export function PodcastCreator({ classId, userId, token, onCancel, onComplete, o
         {podcast.errorMessage ? <p className="generation-error">{podcast.errorMessage}</p> : null}
         <div className="creator-actions centered">
           {podcast.status === 'failed' ? (
-            <button className="secondary-button" type="button" onClick={async () => setPodcast(await retryMyPodcast(classId, podcast.id, userId, token))}>
+            <button className="secondary-button" type="button" onClick={async () => setPodcast(await retryMyPodcast(classId, podcast.id, token))}>
               <RotateCcw size={17} /> Try again
             </button>
           ) : null}

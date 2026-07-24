@@ -33,8 +33,3 @@ export interface UpdateManagedEpisodeInput {
   draft?: EpisodeDraftInput;
   voiceOverrides?: EpisodeVoiceOverrides;
 }
-
-export interface AuthenticatedManager {
-  userId: string;
-  role: 'admin' | 'professor';
-}

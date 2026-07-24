@@ -10,7 +10,7 @@ describe('PersonalPodcastService audio ownership', () => {
   };
 
   function service() {
-    const prisma = { personalPodcast: { findUnique: vi.fn(async () => record) } };
+    const prisma = { personalPodcast: { findFirst: vi.fn(async () => record) } };
     return new PersonalPodcastService(
       prisma as never,
       {} as never,
@@ -21,15 +21,22 @@ describe('PersonalPodcastService audio ownership', () => {
   }
 
   it('returns an object key to the owner', async () => {
-    await expect(service().audioStorageKey('podcast-1', 'student-1')).resolves.toBe(
+    await expect(service().audioStorageKey('class-1', 'podcast-1', 'student-1')).resolves.toBe(
       'personal/student-1/podcast-1.mp3',
     );
   });
 
   it('does not reveal another student audio object', async () => {
-    await expect(service().audioStorageKey('podcast-1', 'student-2')).rejects.toMatchObject({
-      status: 404,
-    });
+    const subject = new PersonalPodcastService(
+      { personalPodcast: { findFirst: vi.fn().mockResolvedValue(null) } } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    await expect(
+      subject.audioStorageKey('class-1', 'podcast-1', 'student-2'),
+    ).rejects.toMatchObject({ status: 404 });
   });
 
   it('deletes owned MinIO audio before deleting the database row', async () => {
@@ -159,13 +166,17 @@ describe('PersonalPodcastService audio ownership', () => {
       storage as never,
     );
 
-    await subject.create('class-1', {
-      ownerUserId: 'student-1',
-      prompt: 'Explain the live lecture material',
-      materialIds: ['doc-1'],
-      durationMinutes: 5,
-      difficulty: 'intermediate',
-    }, 'fresh-token');
+    await subject.create(
+      'class-1',
+      'student-1',
+      {
+        prompt: 'Explain the live lecture material',
+        materialIds: ['doc-1'],
+        durationMinutes: 5,
+        difficulty: 'intermediate',
+      },
+      'fresh-token',
+    );
 
     expect(source.listMaterials).toHaveBeenCalledWith('class-1', 'fresh-token');
     await vi.waitFor(() => {

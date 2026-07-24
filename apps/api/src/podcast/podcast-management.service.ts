@@ -76,7 +76,7 @@ export class PodcastManagementService {
             jobId: episode.publishedJob.id,
             generatedAt: episode.publishedJob.finishedAt?.toISOString() ?? episode.publishedJob.updatedAt.toISOString(),
             durationSeconds: episode.publishedJob.durationSeconds,
-            audioUrl: `${this.publicBase}/api/podcast/audio/${encodeURIComponent(episode.episodeId)}?v=${episode.publishedJob.id}`,
+            audioUrl: `${this.publicBase}/api/podcast/classes/${encodeURIComponent(classId)}/audio/${encodeURIComponent(episode.episodeId)}?v=${episode.publishedJob.id}`,
           } : null,
           latestRender: latest ? this.jobResponse(latest) : null,
         }];

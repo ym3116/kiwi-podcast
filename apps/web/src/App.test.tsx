@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
@@ -13,13 +13,12 @@ const generatedEpisode = {
   durationLabel: '15 min',
   script: 'HOST_A: Welcome to Lasso regression.\n\nHOST_B: Lasso encourages sparse models.',
   status: 'ready' as const,
-  audioUrl: 'http://localhost:8010/api/podcast/audio/episode-49d054f2-2a9c-44f1-9a9f-43d67d77a01a',
+  audioUrl: 'http://localhost:8010/api/podcast/classes/1ef1daa0-6f00-4c52-b13f-fa85b65b3e31/audio/episode-49d054f2-2a9c-44f1-9a9f-43d67d77a01a',
 };
 
 const personalPodcast = {
   id: 'personal-1',
   classId: '1ef1daa0-6f00-4c52-b13f-fa85b65b3e31',
-  ownerUserId: 'sim-user-1',
   prompt: 'Explain regularization for the exam',
   title: 'Regularization review',
   summary: 'A focused review made for the exam.',
@@ -40,7 +39,7 @@ const personalPodcast = {
     { speaker: 'HOST_A' as const, text: 'Welcome to your regularization review.' },
     { speaker: 'HOST_B' as const, text: 'Let’s compare Lasso and ridge.' },
   ],
-  audioUrl: 'http://localhost:8010/api/podcast/my-podcasts/personal-1/audio',
+  audioUrl: 'https://filesamples.com/samples/audio/mp3/sample3.mp3',
   createdAt: '2026-07-13T00:00:00.000Z',
   updatedAt: '2026-07-13T00:00:00.000Z',
 };
@@ -192,5 +191,101 @@ describe('App', () => {
 
     expect(await screen.findByText(/live Kiwi class documents/i)).toBeInTheDocument();
     expect(screen.getByText('No parsed Kiwi documents are currently available for this class.')).toBeInTheDocument();
+  });
+
+  it('fetches live audio with the app token and revokes its temporary Blob URL', async () => {
+    const classId = '1ef1daa0-6f00-4c52-b13f-fa85b65b3e31';
+    (window as Window & { __KIWI_PODCAST_FORCE_MODE__?: 'live' })
+      .__KIWI_PODCAST_FORCE_MODE__ = 'live';
+    const createObjectURL = vi.fn(() => 'blob:protected-audio');
+    const revokeObjectURL = vi.fn();
+    const originalCreateObjectURL = URL.createObjectURL;
+    const originalRevokeObjectURL = URL.revokeObjectURL;
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL });
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeObjectURL });
+
+    const audioBlob = new Blob(['audio'], { type: 'audio/mpeg' });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/manage')) {
+        return { ok: false, status: 403, json: async () => ({ error: 'Forbidden' }) };
+      }
+      if (url.includes('/audio/')) {
+        return { ok: true, status: 200, blob: async () => audioBlob };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          podcast: {
+            id: 'podcast-class-1',
+            classId,
+            title: 'Class - Podcast',
+            description: 'Shared class podcast',
+            coverTheme: 'kiwi',
+          },
+          episodes: [generatedEpisode],
+        }),
+      };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const user = userEvent.setup();
+      const { unmount } = render(<App />);
+      act(() => {
+        window.dispatchEvent(new MessageEvent('message', {
+          origin: 'https://kiwi.example',
+          data: {
+            type: 'kiwi:context',
+            payload: {
+              classId,
+              className: 'Algorithms',
+              userId: 'student-1',
+              username: 'Alice',
+              userRole: 'student',
+              appId: 'app-1',
+              appSlug: 'kiwi-podcast',
+              uiSlug: 'student',
+              capabilities: ['mcp'],
+            },
+          },
+        }));
+        window.dispatchEvent(new MessageEvent('message', {
+          origin: 'https://kiwi.example',
+          data: {
+            type: 'kiwi:appToken',
+            payload: {
+              accessToken: 'kiwi-token',
+              scopes: ['class:info:read'],
+              expiresIn: 3600,
+              appSlug: 'kiwi-podcast',
+            },
+          },
+        }));
+      });
+
+      const title = await screen.findByText('Understanding Lasso Regression');
+      await user.click(title);
+      await user.click(screen.getByRole('button', { name: 'Play' }));
+
+      await waitFor(() => expect(createObjectURL).toHaveBeenCalledWith(audioBlob));
+      expect(fetchMock).toHaveBeenCalledWith(
+        generatedEpisode.audioUrl,
+        { headers: { Authorization: 'Bearer kiwi-token' } },
+      );
+
+      unmount();
+      expect(revokeObjectURL).toHaveBeenCalledWith('blob:protected-audio');
+    } finally {
+      Object.defineProperty(URL, 'createObjectURL', {
+        configurable: true,
+        value: originalCreateObjectURL,
+      });
+      Object.defineProperty(URL, 'revokeObjectURL', {
+        configurable: true,
+        value: originalRevokeObjectURL,
+      });
+    }
   });
 });

@@ -7,7 +7,6 @@ import { MyPodcasts } from './MyPodcasts';
 const podcast: PersonalPodcast = {
   id: 'podcast-1',
   classId: 'class-1',
-  ownerUserId: 'student-1',
   prompt: 'Explain regularization for the exam',
   title: 'Regularization review',
   summary: 'A review',

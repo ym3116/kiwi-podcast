@@ -9,7 +9,6 @@ import { ScriptGeneratorService } from './script-generator.service';
 import { AudioProductionService } from './audio-production.service';
 
 export interface CreatePersonalPodcastInput {
-  ownerUserId: string;
   prompt: string;
   materialIds: string[];
   durationMinutes: 5 | 10 | 15;
@@ -48,13 +47,18 @@ export class PersonalPodcastService {
     }
   }
 
-  async create(classId: string, input: CreatePersonalPodcastInput, accessToken: string) {
+  async create(
+    classId: string,
+    ownerUserId: string,
+    input: CreatePersonalPodcastInput,
+    accessToken: string,
+  ) {
     const selected = await this.validateInput(classId, input, accessToken);
     const selectedMetadata = selected.map((material) => ({ ...material, preview: '' }));
     const podcast = await this.prisma.personalPodcast.create({
       data: {
         classId,
-        ownerUserId: input.ownerUserId,
+        ownerUserId,
         prompt: input.prompt.trim(),
         durationMinutes: input.durationMinutes,
         difficulty: input.difficulty,
@@ -113,13 +117,10 @@ export class PersonalPodcastService {
     return { deleted: true, id: podcast.id };
   }
 
-  async audioStorageKey(id: string, ownerUserId: string): Promise<string> {
-    const podcast = await this.prisma.personalPodcast.findUnique({ where: { id } });
-    if (!podcast || podcast.status !== 'ready' || !podcast.audioStorageKey) {
+  async audioStorageKey(classId: string, id: string, ownerUserId: string): Promise<string> {
+    const podcast = await this.owned(classId, id, ownerUserId);
+    if (podcast.status !== 'ready' || !podcast.audioStorageKey) {
       throw new HttpException({ error: 'Podcast audio not found' }, HttpStatus.NOT_FOUND);
-    }
-    if (!ownerUserId || podcast.ownerUserId !== ownerUserId) {
-      throw new HttpException({ error: 'Podcast not found' }, HttpStatus.NOT_FOUND);
     }
     return podcast.audioStorageKey;
   }
@@ -129,7 +130,6 @@ export class PersonalPodcastService {
     input: CreatePersonalPodcastInput,
     accessToken: string,
   ): Promise<PodcastMaterial[]> {
-    if (!input.ownerUserId?.trim()) this.badRequest('ownerUserId is required');
     if (input.prompt?.trim().length < 10 || input.prompt.trim().length > 1000) {
       this.badRequest('Prompt must be between 10 and 1000 characters');
     }
@@ -233,7 +233,6 @@ export class PersonalPodcastService {
     return {
       id: podcast.id,
       classId: podcast.classId,
-      ownerUserId: podcast.ownerUserId,
       prompt: podcast.prompt,
       title: podcast.title ?? 'Untitled podcast',
       summary: podcast.summary ?? '',
@@ -246,7 +245,7 @@ export class PersonalPodcastService {
       turns: podcast.turns,
       audioUrl:
         podcast.status === 'ready' && podcast.audioStorageKey
-          ? `${this.publicBase}/api/podcast/my-podcasts/${podcast.id}/audio?ownerUserId=${encodeURIComponent(podcast.ownerUserId)}`
+          ? `${this.publicBase}/api/podcast/classes/${encodeURIComponent(podcast.classId)}/my-podcasts/${encodeURIComponent(podcast.id)}/audio`
           : undefined,
       errorMessage: podcast.errorMessage,
       startedAt: podcast.startedAt?.toISOString(),
