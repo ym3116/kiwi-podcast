@@ -1,0 +1,33 @@
+podcast.apps-server.kiwiai.org, podcast.apps.kiwiai.org {
+	tls {
+		dns route53
+	}
+
+	encode zstd gzip
+
+	@api path /api/* /health /health/*
+	handle @api {
+		header Cache-Control "no-store"
+		reverse_proxy api:8010
+	}
+
+	@static path /static/*
+	handle @static {
+		root * /srv
+		header Cache-Control "public, max-age=31536000, immutable"
+		file_server
+	}
+
+	handle {
+		root * /srv
+		header Cache-Control "no-store"
+		try_files {path} /index.html
+		file_server
+	}
+
+	header {
+		-X-Frame-Options
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+}

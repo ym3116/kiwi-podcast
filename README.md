@@ -268,10 +268,20 @@ curl -H "Authorization: Bearer $KIWI_APP_TOKEN" \
 
 ## Runtime Architecture
 
-The React/Vite frontend and Nest API run only through `npm run dev`. Docker
-Compose contains infrastructure only: PostgreSQL and MinIO. When Nest starts,
-its storage service idempotently creates the private `kiwi-podcasts` bucket.
-Audio is streamed through Nest; the browser never receives MinIO credentials.
+For local development, the React/Vite frontend and Nest API run through
+`npm run dev`; the default Docker Compose file contains only PostgreSQL and
+MinIO.
+
+Production uses `compose.production.yml` for the complete stack. A custom Caddy
+image terminates TLS for both assigned hostnames, serves the compiled frontend,
+and proxies `/api/*` and `/health/*` to the private Nest container. PostgreSQL,
+MinIO, and the API do not publish host ports. See
+[`deploy/README.md`](deploy/README.md) for the production files, required
+environment variables, and startup sequence.
+
+When Nest starts, its storage service idempotently creates the private
+`kiwi-podcasts` bucket. Audio is streamed through Nest; the browser never
+receives MinIO credentials.
 
 Chunk exports remain local and ignored at `apps/api/demo-chunks/*.json`, but
 they are used only by standalone Simulator mode. The exact simulator token
@@ -295,6 +305,8 @@ npm run clean
 - Intermediate WAV files use a unique OS temporary directory and are deleted in
   a `finally` cleanup on success or failure. Generation also removes abandoned
   Kiwi audio workspaces older than six hours to recover from process crashes.
+- On an API restart, in-process generation jobs are marked failed so users can
+  retry instead of seeing a permanently stuck job.
 - `apps/api/dist` and `apps/web/dist` are ignored, disposable build output.
 - Standalone Simulator mode still works when opening `http://localhost:8000`
   outside Kiwi.

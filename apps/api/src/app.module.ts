@@ -18,6 +18,7 @@ import { PodcastManagementAuthService } from './podcast/podcast-management-auth.
 import { KiwiDocumentChunkSource } from './podcast/kiwi-document-chunk-source';
 import { PodcastChunkSourceService } from './podcast/podcast-chunk-source.service';
 import { PodcastAccessAuthService } from './podcast/podcast-access-auth.service';
+import { InterruptedJobRecoveryService } from './podcast/interrupted-job-recovery.service';
 
 @Module({
   imports: [DatabaseModule],
@@ -36,6 +37,7 @@ import { PodcastAccessAuthService } from './podcast/podcast-access-auth.service'
     AudioProductionService,
     PodcastManagementService,
     PodcastAccessAuthService,
+    InterruptedJobRecoveryService,
     PodcastManagementAuthService,
     AudioStorageService,
     { provide: AUDIO_S3_CLIENT, useFactory: createAudioS3Client },

@@ -4,6 +4,8 @@ coverage/
 .env
 .env.*
 !.env.example
+deploy/*.env
+!deploy/*.env.example
 .DS_Store
 apps/api/demo-chunks/*.json
 apps/api/demo-chunks/*.local.json

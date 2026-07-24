@@ -1,0 +1,33 @@
+# syntax=docker/dockerfile:1.7
+
+FROM node:20-alpine AS web-build
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+COPY apps/api/package.json apps/api/package.json
+COPY apps/web/package.json apps/web/package.json
+
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --workspace apps/web --include-workspace-root --no-audit --no-fund
+
+COPY apps/web apps/web
+
+ARG VITE_PODCAST_API_BASE=/
+ENV VITE_PODCAST_API_BASE=${VITE_PODCAST_API_BASE}
+
+RUN npm run build -w apps/web
+
+FROM caddy:2.11.4-builder AS caddy-build
+
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    xcaddy build --with github.com/caddy-dns/route53@v1.6.2
+
+FROM caddy:2.11.4-alpine AS runtime
+
+COPY --from=caddy-build /usr/bin/caddy /usr/bin/caddy
+COPY deploy/Caddyfile /etc/caddy/Caddyfile
+COPY --from=web-build /app/apps/web/dist /srv
+
+EXPOSE 443
