@@ -1,6 +1,8 @@
 podcast.apps-server.kiwiai.org, podcast.apps.kiwiai.org {
 	tls {
-		dns route53
+		dns route53 {
+			hosted_zone_id {$AWS_HOSTED_ZONE_ID}
+		}
 	}
 
 	encode zstd gzip
