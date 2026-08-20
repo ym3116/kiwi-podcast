@@ -2,6 +2,7 @@ import {
   DemoMaterial,
   EpisodeVoiceOverrides,
   PersonalPodcast,
+  PodcastAdminClassesState,
   PodcastDifficulty,
   PodcastGlobalDefaultsState,
   PodcastManagementState,
@@ -143,6 +144,10 @@ export function updatePodcastDefaults(classId: string, token: string, defaults: 
 
 export function fetchPodcastGlobalDefaults(token: string) {
   return apiJson<PodcastGlobalDefaultsState>('/api/podcast/admin/defaults', token);
+}
+
+export function fetchPodcastAdminClasses(token: string) {
+  return apiJson<PodcastAdminClassesState>('/api/podcast/admin/classes', token);
 }
 
 export function updatePodcastGlobalDefaults(token: string, defaults: PodcastVoiceSettings) {

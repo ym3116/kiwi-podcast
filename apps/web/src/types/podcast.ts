@@ -91,6 +91,19 @@ export interface PodcastGlobalDefaultsState {
   updatedAt: string | null;
 }
 
+export interface PodcastAdminClassSummary {
+  classId: string;
+  className: string;
+  podcastEnabled: boolean;
+  voiceSource: 'global' | 'class' | null;
+  episodeCount: number;
+  lastActivityAt: string | null;
+}
+
+export interface PodcastAdminClassesState {
+  classes: PodcastAdminClassSummary[];
+}
+
 export interface EpisodeVoiceOverrides {
   host?: VoiceProfile;
   speaker?: VoiceProfile;

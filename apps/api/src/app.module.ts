@@ -23,6 +23,7 @@ import { PodcastAdminAuthService } from './podcast/podcast-admin-auth.service';
 import { PodcastAdminController } from './podcast/podcast-admin.controller';
 import { PodcastGlobalSettingsService } from './podcast/podcast-global-settings.service';
 import { PodcastVoiceSettingsService } from './podcast/podcast-voice-settings.service';
+import { PodcastAdminClassesService } from './podcast/podcast-admin-classes.service';
 
 @Module({
   imports: [DatabaseModule],
@@ -49,6 +50,7 @@ import { PodcastVoiceSettingsService } from './podcast/podcast-voice-settings.se
     InterruptedJobRecoveryService,
     PodcastManagementAuthService,
     PodcastAdminAuthService,
+    PodcastAdminClassesService,
     PodcastGlobalSettingsService,
     PodcastVoiceSettingsService,
     AudioStorageService,

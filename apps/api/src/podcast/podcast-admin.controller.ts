@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Headers, Inject, Patch, Post, Res } from '@nestjs/common';
 import { PodcastAdminAuthService } from './podcast-admin-auth.service';
 import { PodcastGlobalSettingsService } from './podcast-global-settings.service';
+import { PodcastAdminClassesService } from './podcast-admin-classes.service';
 
 @Controller('api/podcast/admin')
 export class PodcastAdminController {
@@ -8,7 +9,15 @@ export class PodcastAdminController {
     @Inject(PodcastAdminAuthService) private readonly auth: PodcastAdminAuthService,
     @Inject(PodcastGlobalSettingsService)
     private readonly settings: PodcastGlobalSettingsService,
+    @Inject(PodcastAdminClassesService)
+    private readonly classes: PodcastAdminClassesService,
   ) {}
+
+  @Get('classes')
+  async getClasses(@Headers('authorization') authorization?: string) {
+    const principal = await this.auth.authorize(authorization);
+    return this.classes.list(principal.accessToken);
+  }
 
   @Get('defaults')
   async getDefaults(@Headers('authorization') authorization?: string) {

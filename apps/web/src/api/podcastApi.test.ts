@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createMyPodcast,
   deleteMyPodcast,
+  fetchPodcastAdminClasses,
   fetchPodcastGlobalDefaults,
   fetchMyPodcast,
   fetchMyPodcasts,
@@ -82,12 +83,15 @@ describe('podcast API ownership and media requests', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await fetchPodcastGlobalDefaults('admin-token');
+    await fetchPodcastAdminClasses('admin-token');
     await updatePodcastGlobalDefaults('admin-token', defaults);
 
     expect(fetchMock.mock.calls[0][0]).toBe('http://localhost:8010/api/podcast/admin/defaults');
     expect(fetchMock.mock.calls[0][1].headers).toMatchObject({ Authorization: 'Bearer admin-token' });
-    expect(fetchMock.mock.calls[1][1]).toMatchObject({ method: 'PATCH' });
-    expect(String(fetchMock.mock.calls[1][0])).not.toContain('/classes/');
+    expect(fetchMock.mock.calls[1][0]).toBe('http://localhost:8010/api/podcast/admin/classes');
+    expect(fetchMock.mock.calls[1][1].headers).toMatchObject({ Authorization: 'Bearer admin-token' });
+    expect(fetchMock.mock.calls[2][1]).toMatchObject({ method: 'PATCH' });
+    expect(String(fetchMock.mock.calls[2][0])).not.toContain('/classes/');
   });
 
   it('surfaces the API authorization message instead of the generic status label', async () => {

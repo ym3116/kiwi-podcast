@@ -5,11 +5,14 @@ import {
   Headphones,
   KeyRound,
   Loader2,
+  RefreshCw,
   Save,
+  School,
   Settings2,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  fetchPodcastAdminClasses,
   fetchPodcastGlobalDefaults,
   previewGlobalVoice,
   updatePodcastGlobalDefaults,
@@ -17,6 +20,7 @@ import {
 import { useKiwiBridge } from './bridge/useKiwiBridge';
 import { VoiceEditor } from './components/VoiceEditor';
 import {
+  PodcastAdminClassesState,
   PodcastGlobalDefaultsState,
   PodcastVoiceSettings,
   VoiceProfile,
@@ -48,8 +52,54 @@ const cloneSettings = (settings: PodcastVoiceSettings): PodcastVoiceSettings => 
   speaker: { ...settings.speaker },
 });
 
+const simulatorClasses = (): PodcastAdminClassesState => {
+  const now = Date.now();
+  return {
+    classes: [
+      {
+        classId: 'sim-machine-learning',
+        className: 'Machine Learning',
+        podcastEnabled: true,
+        voiceSource: 'global',
+        episodeCount: 8,
+        lastActivityAt: new Date(now - 2 * 60 * 60 * 1000).toISOString(),
+      },
+      {
+        classId: 'sim-icp',
+        className: 'ICP',
+        podcastEnabled: true,
+        voiceSource: 'class',
+        episodeCount: 3,
+        lastActivityAt: new Date(now - 26 * 60 * 60 * 1000).toISOString(),
+      },
+      {
+        classId: 'sim-economics',
+        className: 'Economics',
+        podcastEnabled: false,
+        voiceSource: null,
+        episodeCount: 0,
+        lastActivityAt: null,
+      },
+    ],
+  };
+};
+
+function formatLastActivity(value: string | null): string {
+  if (!value) return '—';
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return '—';
+  const elapsedMinutes = Math.max(0, Math.floor((Date.now() - timestamp) / 60_000));
+  if (elapsedMinutes < 1) return 'Just now';
+  if (elapsedMinutes < 60) return `${elapsedMinutes} minute${elapsedMinutes === 1 ? '' : 's'} ago`;
+  const elapsedHours = Math.floor(elapsedMinutes / 60);
+  if (elapsedHours < 24) return `${elapsedHours} hour${elapsedHours === 1 ? '' : 's'} ago`;
+  if (elapsedHours < 48) return 'Yesterday';
+  return new Date(timestamp).toLocaleDateString();
+}
+
 export function AdminApp() {
   const bridge = useKiwiBridge();
+  const [activePage, setActivePage] = useState<'defaults' | 'classes'>('defaults');
   const [state, setState] = useState<PodcastGlobalDefaultsState | null>(null);
   const [draft, setDraft] = useState<PodcastVoiceSettings | null>(null);
   const [loading, setLoading] = useState(true);
@@ -57,6 +107,10 @@ export function AdminApp() {
   const [error, setError] = useState<string | null>(null);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [classesState, setClassesState] = useState<PodcastAdminClassesState | null>(null);
+  const [classesLoading, setClassesLoading] = useState(true);
+  const [classesError, setClassesError] = useState<string | null>(null);
+  const [classesReloadKey, setClassesReloadKey] = useState(0);
   const [playingPreview, setPlayingPreview] = useState<string | null>(null);
   const [loadingPreview, setLoadingPreview] = useState<string | null>(null);
   const [authorizationClassId, setAuthorizationClassId] = useState('');
@@ -65,6 +119,7 @@ export function AdminApp() {
   const previewRequestRef = useRef(0);
 
   useEffect(() => {
+    if (activePage !== 'defaults') return;
     if (!bridge.context) return;
     if (bridge.mode === 'live' && !bridge.token?.accessToken) return;
     let cancelled = false;
@@ -92,7 +147,35 @@ export function AdminApp() {
 
     void load();
     return () => { cancelled = true; };
-  }, [bridge.context, bridge.mode, bridge.token?.accessToken, reloadKey]);
+  }, [activePage, bridge.context, bridge.mode, bridge.token?.accessToken, reloadKey]);
+
+  useEffect(() => {
+    if (activePage !== 'classes') return;
+    if (!bridge.context) return;
+    if (bridge.mode === 'live' && !bridge.token?.accessToken) return;
+    let cancelled = false;
+
+    async function loadClasses() {
+      setClassesLoading(true);
+      setClassesError(null);
+      try {
+        const next = bridge.mode === 'simulator'
+          ? simulatorClasses()
+          : await fetchPodcastAdminClasses(bridge.token!.accessToken);
+        if (!cancelled) setClassesState(next);
+      } catch (caught) {
+        if (cancelled) return;
+        const message = caught instanceof Error ? caught.message : 'Unable to load classes.';
+        setClassesError(message);
+        if (/401|expired|rejected.*token/i.test(message)) bridge.requestToken('expired');
+      } finally {
+        if (!cancelled) setClassesLoading(false);
+      }
+    }
+
+    void loadClasses();
+    return () => { cancelled = true; };
+  }, [activePage, bridge.context, bridge.mode, bridge.token?.accessToken, classesReloadKey]);
 
   const stopPreview = useCallback(() => {
     previewRequestRef.current += 1;
@@ -199,8 +282,21 @@ export function AdminApp() {
       <aside className="admin-app-sidebar" aria-label="Podcast admin navigation">
         <div className="admin-app-brand"><Headphones size={25} /><span>Podcast Admin</span></div>
         <nav>
-          <button className="active" type="button" aria-current="page">
+          <button
+            className={activePage === 'defaults' ? 'active' : ''}
+            type="button"
+            aria-current={activePage === 'defaults' ? 'page' : undefined}
+            onClick={() => setActivePage('defaults')}
+          >
             <Settings2 size={18} /> Global Defaults
+          </button>
+          <button
+            className={activePage === 'classes' ? 'active' : ''}
+            type="button"
+            aria-current={activePage === 'classes' ? 'page' : undefined}
+            onClick={() => setActivePage('classes')}
+          >
+            <School size={18} /> All Classes
           </button>
         </nav>
         <div className="admin-app-runtime" aria-label="Runtime status">
@@ -212,13 +308,23 @@ export function AdminApp() {
       <main className="admin-app-content">
         <header className="admin-app-header">
           <div>
-            <div className="eyebrow">System-wide configuration</div>
-            <h1>Global voice defaults</h1>
-            <p>Classes inherit these voices unless they have saved their own class or episode override.</p>
+            <div className="eyebrow">
+              {activePage === 'defaults' ? 'System-wide configuration' : 'System-wide overview'}
+            </div>
+            <h1>{activePage === 'defaults' ? 'Global voice defaults' : 'All classes'}</h1>
+            <p>
+              {activePage === 'defaults'
+                ? 'Classes inherit these voices unless they have saved their own class or episode override.'
+                : 'Podcast status and recent activity for classes visible to this Kiwi admin.'}
+            </p>
           </div>
-          {state ? (
+          {activePage === 'defaults' && state ? (
             <span className="admin-source-badge">
               {state.source === 'saved' ? 'Saved global settings' : 'Environment defaults'}
+            </span>
+          ) : activePage === 'classes' && classesState ? (
+            <span className="admin-source-badge">
+              {classesState.classes.length} {classesState.classes.length === 1 ? 'class' : 'classes'}
             </span>
           ) : null}
         </header>
@@ -264,6 +370,79 @@ export function AdminApp() {
               <small>{bridge.error}</small>
             </div>
           </section>
+        ) : activePage === 'classes' ? (
+          classesLoading ? (
+            <section className="admin-message"><Loader2 className="spin" size={24} /><p>Loading classes…</p></section>
+          ) : classesError ? (
+            <section className="admin-message error" role="alert">
+              <AlertCircle size={22} />
+              <div>
+                <strong>Unable to load classes</strong>
+                <p>{classesError}</p>
+                <button className="secondary-button" type="button" onClick={() => setClassesReloadKey((key) => key + 1)}>Retry</button>
+              </div>
+            </section>
+          ) : classesState ? (
+            <>
+              {bridge.mode === 'simulator' ? (
+                <div className="admin-notice">Simulator mode uses representative class data. No Kiwi or Podcast records are changed.</div>
+              ) : null}
+              <section className="manager-panel admin-classes-panel">
+                <div className="section-header">
+                  <div>
+                    <div className="eyebrow">Podcast availability</div>
+                    <h2>Class podcasts</h2>
+                    <p>
+                      {classesState.classes.filter((item) => item.podcastEnabled).length} enabled of{' '}
+                      {classesState.classes.length} visible classes
+                    </p>
+                  </div>
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={() => setClassesReloadKey((key) => key + 1)}
+                  >
+                    <RefreshCw size={15} /> Refresh
+                  </button>
+                </div>
+                {classesState.classes.length ? (
+                  <div className="admin-classes-table-wrap">
+                    <table className="admin-classes-table" aria-label="All class podcasts">
+                      <thead>
+                        <tr>
+                          <th scope="col">Class</th>
+                          <th scope="col">Podcast status</th>
+                          <th scope="col">Voice source</th>
+                          <th scope="col">Episodes</th>
+                          <th scope="col">Last activity</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {classesState.classes.map((item) => (
+                          <tr key={item.classId}>
+                            <th scope="row">{item.className}</th>
+                            <td>
+                              <span className={`admin-status-badge ${item.podcastEnabled ? 'enabled' : 'disabled'}`}>
+                                {item.podcastEnabled ? 'Enabled' : 'Disabled'}
+                              </span>
+                            </td>
+                            <td>{item.voiceSource === 'class' ? 'Class override' : item.voiceSource === 'global' ? 'Global' : '—'}</td>
+                            <td>{item.podcastEnabled ? item.episodeCount : '—'}</td>
+                            <td>{formatLastActivity(item.lastActivityAt)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="admin-classes-empty">
+                    <School size={26} />
+                    <strong>No classes are visible to this Kiwi admin.</strong>
+                  </div>
+                )}
+              </section>
+            </>
+          ) : null
         ) : loading ? (
           <section className="admin-message"><Loader2 className="spin" size={24} /><p>Loading global defaults…</p></section>
         ) : error && !draft ? (

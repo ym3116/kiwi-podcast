@@ -8,6 +8,15 @@ interface JsonRpcResponse {
   };
 }
 
+export interface KiwiClassAppScopes {
+  appSlug: string;
+  classId: string;
+  maxScopes: string[];
+  enabledScopes: string[];
+  promptScopes: string[];
+  effectiveScopes: string[];
+}
+
 @Injectable()
 export class KiwiMcpClient {
   private readonly kiwiApiBase = (process.env.KIWI_API_BASE ?? 'http://localhost:3000').replace(
@@ -52,6 +61,29 @@ export class KiwiMcpClient {
     const body = await response.json().catch(() => null);
     if (!response.ok) throw new Error(body?.error || `Kiwi permissions returned ${response.status}`);
     return typeof body?.role === 'string' ? body.role : null;
+  }
+
+  async getClassAppScopes(
+    accessToken: string,
+    appSlug: string,
+    classId: string,
+  ): Promise<KiwiClassAppScopes> {
+    const response = await fetch(
+      `${this.kiwiApiBase}/api/kiwi-apps/${encodeURIComponent(appSlug)}/scopes/${encodeURIComponent(classId)}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    const body = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(body?.message || body?.error || `Kiwi app scopes returned ${response.status}`);
+    }
+    return {
+      appSlug,
+      classId,
+      maxScopes: this.stringArray(body?.maxScopes),
+      enabledScopes: this.stringArray(body?.enabledScopes),
+      promptScopes: this.stringArray(body?.promptScopes),
+      effectiveScopes: this.stringArray(body?.effectiveScopes),
+    };
   }
 
   private async withSession<T>(
@@ -155,5 +187,9 @@ export class KiwiMcpClient {
   private errorMessage(body: unknown): string | null {
     const error = (body as JsonRpcResponse | null)?.error;
     return error?.message ?? null;
+  }
+
+  private stringArray(value: unknown): string[] {
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
   }
 }

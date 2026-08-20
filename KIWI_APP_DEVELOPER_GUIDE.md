@@ -231,6 +231,14 @@ An enabled `admin-panel` UI appears under **App Admin Panels** at
 `uiUrl`, appends app/user/UI context, and sends the normal `kiwi:context` and
 `kiwi:appToken` messages after `kiwi:ready`.
 
+An external admin UI may expose several internal pages without registering more
+Kiwi UIs. For example, Podcast Admin renders **Global Defaults** and a read-only
+**All Classes** overview inside the same `/admin` iframe. Its API reads
+`kiwi://classes` with the verified app token, checks each class through
+`GET /api/kiwi-apps/:slug/scopes/:classId`, and joins that result with
+Podcast-owned data. The resource lists classes visible to the authenticated
+Kiwi identity; it should not be described as an unrestricted database dump.
+
 ### 4.3 Admin/Instructor — enable the app in a class
 
 `POST /api/classes/:classId/apps` — see `kiwi-app.controller.ts:350`.

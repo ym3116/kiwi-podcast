@@ -177,6 +177,19 @@ writes the singleton global settings record, so every class without an explicit
 class or episode override inherits the saved voices. Podcast must be enabled in
 the authorization class with `podcast:manage`.
 
+Podcast Admin currently contains two internal pages:
+
+- **Global Defaults** edits the inherited host and speaker voices.
+- **All Classes** is a read-only overview with Podcast enablement, effective
+  voice source, published episode count, and latest Podcast activity. It lists
+  the classes returned by Kiwi's `kiwi://classes` resource for the authenticated
+  admin identity, so a Kiwi deployment that restricts that resource may expose
+  fewer classes than exist system-wide.
+
+The overview is served by `GET /api/podcast/admin/classes`. Podcast checks each
+class through Kiwi's existing app-scope inspection endpoint and combines that
+state with local Podcast records; no Kiwi code or database changes are needed.
+
 The registration contains two UIs under the same app slug: `student` uses the
 `class-tab` placement, while `global-admin` uses `admin-panel` and loads
 `http://localhost:8000/admin`. Re-running `register.sh` upserts both UIs.
@@ -219,6 +232,9 @@ the source of truth for identity and class access:
 - **Global Defaults** requires `podcast:manage` and a Kiwi-verified system admin.
   A selected class may provide the token context, but does not narrow or relocate
   the global settings record.
+- **All Classes** uses the same global-admin authorization. Its episode count
+  includes published class episodes only, and its last-activity value is the
+  newest local class-settings, published-episode, or generation-job update.
 - Class and personal audio endpoints require the bearer token. The web app
   downloads protected MP3s with `fetch`, creates one temporary browser Blob URL,
   and revokes it when the track changes.

@@ -46,6 +46,51 @@ describe('AdminApp', () => {
     expect(screen.getAllByRole('button', { name: 'Preview' })[0]).toBeDisabled();
   });
 
+  it('shows representative class podcast data in Simulator mode', async () => {
+    (window as Window & { __KIWI_PODCAST_FORCE_MODE__?: 'simulator' })
+      .__KIWI_PODCAST_FORCE_MODE__ = 'simulator';
+    const user = userEvent.setup();
+    render(<AdminApp />);
+
+    await user.click(screen.getByRole('button', { name: /All Classes/i }));
+
+    expect(await screen.findByRole('heading', { name: 'All classes' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /All Classes/i })).toHaveAttribute('aria-current', 'page');
+    expect(await screen.findByRole('table', { name: 'All class podcasts' })).toBeInTheDocument();
+    expect(screen.getByRole('rowheader', { name: 'Machine Learning' })).toBeInTheDocument();
+    expect(screen.getByRole('rowheader', { name: 'ICP' })).toBeInTheDocument();
+    expect(screen.getByRole('rowheader', { name: 'Economics' })).toBeInTheDocument();
+    expect(screen.getByText('Class override')).toBeInTheDocument();
+    expect(screen.getByText('8')).toBeInTheDocument();
+  });
+
+  it('loads the class overview with the Kiwi admin bearer token', async () => {
+    (window as Window & { __KIWI_PODCAST_FORCE_MODE__?: 'live' })
+      .__KIWI_PODCAST_FORCE_MODE__ = 'live';
+    const classesState = {
+      classes: [{
+        classId: 'class-1',
+        className: 'Machine Learning',
+        podcastEnabled: true,
+        voiceSource: 'global',
+        episodeCount: 8,
+        lastActivityAt: '2026-08-20T08:00:00.000Z',
+      }],
+    };
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(classesState));
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    render(<AdminApp />);
+    await user.click(screen.getByRole('button', { name: /All Classes/i }));
+    sendLiveContext();
+
+    expect(await screen.findByRole('rowheader', { name: 'Machine Learning' })).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:8010/api/podcast/admin/classes', {
+      headers: { Authorization: 'Bearer admin-token' },
+    });
+    expect(screen.getByText('1 enabled of 1 visible classes')).toBeInTheDocument();
+  });
+
   it('loads and saves defaults with the classless Kiwi bearer token', async () => {
     (window as Window & { __KIWI_PODCAST_FORCE_MODE__?: 'live' })
       .__KIWI_PODCAST_FORCE_MODE__ = 'live';
