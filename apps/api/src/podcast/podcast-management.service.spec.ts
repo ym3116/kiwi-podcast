@@ -1,6 +1,7 @@
 import { ConflictException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import { PodcastManagementService } from './podcast-management.service';
+import { PodcastVoiceSettingsService } from './podcast-voice-settings.service';
 
 describe('PodcastManagementService', () => {
   it('increments the draft revision only when script or voice content changes', async () => {
@@ -38,6 +39,24 @@ describe('PodcastManagementService', () => {
 
     await service.updateDefaults('class-1', settings('shimmer', 'fable'));
 
+    expect(prisma.podcastEpisode.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['inherits'] } },
+      data: { draftRevision: { increment: 1 } },
+    });
+  });
+
+  it('uses global defaults when the class has no voice override', async () => {
+    const prisma = basePrisma();
+    prisma.podcastClass.findUniqueOrThrow.mockResolvedValue({
+      voiceDefaults: null,
+      documents: [{ episode: { id: 'inherits', voiceOverrides: null } }],
+    });
+    const global = { getDefaults: vi.fn().mockResolvedValue(settings('shimmer', 'fable')) };
+    const service = management(prisma, undefined, undefined, undefined, global);
+
+    await service.updateDefaults('class-1', settings('alloy', 'echo'));
+
+    expect(global.getDefaults).toHaveBeenCalled();
     expect(prisma.podcastEpisode.updateMany).toHaveBeenCalledWith({
       where: { id: { in: ['inherits'] } },
       data: { draftRevision: { increment: 1 } },
@@ -121,9 +140,10 @@ describe('PodcastManagementService', () => {
 
 function management(
   prisma: ReturnType<typeof basePrisma>,
-  storage: { delete: ReturnType<typeof vi.fn> } = { delete: vi.fn() },
-  chunks: object = {},
-  scripts: object = {},
+  storage: { delete: ReturnType<typeof vi.fn> } | undefined = { delete: vi.fn() },
+  chunks: object | undefined = {},
+  scripts: object | undefined = {},
+  global: object = { getDefaults: vi.fn().mockResolvedValue(settings('alloy', 'echo')) },
 ) {
   return new PodcastManagementService(
     prisma as never,
@@ -132,8 +152,12 @@ function management(
     scripts as never,
     {} as never,
     {} as never,
-    storage as never,
-    { defaultVoiceSettings: () => settings('alloy', 'echo') } as never,
+    (storage ?? { delete: vi.fn() }) as never,
+    global as never,
+    new PodcastVoiceSettingsService({
+      defaultVoiceSettings: () => settings('alloy', 'echo'),
+      preview: vi.fn(),
+    } as never),
   );
 }
 

@@ -43,6 +43,22 @@ function reducer(state: KiwiBridgeState, action: KiwiBridgeAction): KiwiBridgeSt
 }
 
 function contextFromQuery(): KiwiContext {
+  const isAdminSurface = window.location.pathname.startsWith('/admin')
+    || params.get('placement') === 'admin-panel'
+    || params.get('uiSlug') === 'global-admin';
+  if (isAdminSurface) {
+    return {
+      userId: params.get('userId') || 'sim-admin-1',
+      username: 'Admin Demo',
+      userRole: 'admin',
+      appId: params.get('appId') || simulatorContext.appId,
+      appSlug: 'kiwi-podcast',
+      uiSlug: params.get('uiSlug') || 'global-admin',
+      placement: 'admin-panel',
+      isAdmin: true,
+      capabilities: ['mcp'],
+    };
+  }
   return {
     ...simulatorContext,
     classId: params.get('classId') || simulatorContext.classId,
@@ -80,12 +96,12 @@ export function useKiwiBridge() {
     );
   }, [state.mode]);
 
-  const requestToken = useCallback(() => {
+  const requestToken = useCallback((reason?: string) => {
     if (state.mode === 'simulator') {
       dispatch({ type: 'token', payload: simulatorToken });
       return;
     }
-    post('kiwi:requestToken');
+    post('kiwi:requestToken', reason ? { reason } : {});
   }, [post, state.mode]);
 
   const updateContext = useCallback(
@@ -115,6 +131,13 @@ export function useKiwiBridge() {
 
       if (type === 'kiwi:aiError') {
         dispatch({ type: 'error', payload: payload?.error || 'Kiwi AI request failed.' });
+      }
+
+      if (type === 'kiwi:error') {
+        dispatch({
+          type: 'error',
+          payload: payload?.error || event.data?.message || 'Kiwi could not initialize the app.',
+        });
       }
     }
 

@@ -20,6 +20,7 @@ export const simulatorToken: KiwiAppToken = {
     'class:info:read',
     'class:enrollments:read',
     'class:materials:chunks:read',
+    'podcast:manage',
   ],
   expiresIn: 3600,
   appSlug: 'kiwi-podcast',
@@ -28,7 +29,7 @@ export const simulatorToken: KiwiAppToken = {
 export const simulatorPodcast: PodcastResponse = {
   podcast: {
     id: 'podcast-1ef1daa0-6f00-4c52-b13f-fa85b65b3e31',
-    classId: simulatorContext.classId,
+    classId: simulatorContext.classId!,
     title: `${simulatorContext.className} - Podcast`,
     description:
       'Generated lecture episodes for this Kiwi class. Audio and scripts are placeholders in this version.',

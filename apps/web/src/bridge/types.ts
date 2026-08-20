@@ -1,5 +1,5 @@
 export interface KiwiContext {
-  classId: string;
+  classId?: string;
   className?: string;
   userId?: string;
   username?: string;
@@ -7,6 +7,8 @@ export interface KiwiContext {
   appId?: string;
   appSlug?: string;
   uiSlug?: string;
+  placement?: string;
+  isAdmin?: boolean;
   capabilities?: string[];
 }
 

@@ -61,7 +61,7 @@ export function App() {
 
   useEffect(() => {
     async function loadPodcast() {
-      if (!bridge.context) return;
+      if (!bridge.context?.classId) return;
       if (bridge.mode === 'simulator') {
         setPodcastData(simulatorPodcast);
         setLoadState('ready');
@@ -104,7 +104,7 @@ export function App() {
   }, [managementData, podcastTab]);
 
   const refreshMyPodcasts = async () => {
-    if (!bridge.context?.userId || !bridge.token?.accessToken) return;
+    if (!bridge.context?.classId || !bridge.context.userId || !bridge.token?.accessToken) return;
     setMyPodcastsLoading(true);
     try {
       const result = await fetchMyPodcasts(
@@ -331,13 +331,13 @@ export function App() {
   };
 
   const retryPersonal = async (podcast: PersonalPodcast) => {
-    if (!bridge.context?.userId || !bridge.token?.accessToken) return;
+    if (!bridge.context?.classId || !bridge.context.userId || !bridge.token?.accessToken) return;
     await retryMyPodcast(bridge.context.classId, podcast.id, bridge.token.accessToken);
     await refreshMyPodcasts();
   };
 
   const deletePersonal = async (podcast: PersonalPodcast) => {
-    if (!bridge.context?.userId || !bridge.token?.accessToken) return;
+    if (!bridge.context?.classId || !bridge.context.userId || !bridge.token?.accessToken) return;
     await deleteMyPodcast(bridge.context.classId, podcast.id, bridge.token.accessToken);
     const deletedKey = podcastViewKey(personalPodcastView(podcast));
     if (currentKey === deletedKey) {
@@ -390,7 +390,7 @@ export function App() {
         onCanPlay={(event) => handleAudioMetadata(event.currentTarget)}
       />
 
-      {mainView === 'creator' && bridge.context?.userId && bridge.token?.accessToken ? (
+      {mainView === 'creator' && bridge.context?.classId && bridge.context.userId && bridge.token?.accessToken ? (
         <PodcastCreator
           classId={bridge.context.classId}
           token={bridge.token.accessToken}

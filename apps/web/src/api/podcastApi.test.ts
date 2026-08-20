@@ -2,10 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createMyPodcast,
   deleteMyPodcast,
+  fetchPodcastGlobalDefaults,
   fetchMyPodcast,
   fetchMyPodcasts,
   fetchPodcastAudio,
   retryMyPodcast,
+  updatePodcastGlobalDefaults,
 } from './podcastApi';
 
 describe('podcast API ownership and media requests', () => {
@@ -69,6 +71,40 @@ describe('podcast API ownership and media requests', () => {
       fetchPodcastAudio('https://attacker.example/api/podcast/audio.mp3', 'secret-token'),
     ).rejects.toThrow('untrusted audio URL');
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('uses the classless admin endpoints without adding a class ID', async () => {
+    const defaults = {
+      host: { mode: 'preset' as const, voice: 'nova' as const, description: 'Host', seed: 1, referenceText: 'Hello.' },
+      speaker: { mode: 'preset' as const, voice: 'onyx' as const, description: 'Speaker', seed: 2, referenceText: 'Welcome.' },
+    };
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ defaults, source: 'saved', updatedAt: null }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await fetchPodcastGlobalDefaults('admin-token');
+    await updatePodcastGlobalDefaults('admin-token', defaults);
+
+    expect(fetchMock.mock.calls[0][0]).toBe('http://localhost:8010/api/podcast/admin/defaults');
+    expect(fetchMock.mock.calls[0][1].headers).toMatchObject({ Authorization: 'Bearer admin-token' });
+    expect(fetchMock.mock.calls[1][1]).toMatchObject({ method: 'PATCH' });
+    expect(String(fetchMock.mock.calls[1][0])).not.toContain('/classes/');
+  });
+
+  it('surfaces the API authorization message instead of the generic status label', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: vi.fn().mockResolvedValue({
+        statusCode: 403,
+        error: 'Forbidden',
+        message: 'Missing required podcast scope: podcast:manage',
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchPodcastGlobalDefaults('admin-token')).rejects.toThrow(
+      'Missing required podcast scope: podcast:manage',
+    );
   });
 });
 

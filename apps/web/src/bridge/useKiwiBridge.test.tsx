@@ -6,6 +6,21 @@ describe('useKiwiBridge', () => {
   afterEach(() => {
     delete (window as Window & { __KIWI_PODCAST_FORCE_MODE__?: string })
       .__KIWI_PODCAST_FORCE_MODE__;
+    window.history.replaceState(null, '', '/');
+  });
+
+  it('uses a classless admin context for the standalone admin surface', async () => {
+    window.history.replaceState(null, '', '/admin');
+    (window as Window & { __KIWI_PODCAST_FORCE_MODE__?: 'simulator' })
+      .__KIWI_PODCAST_FORCE_MODE__ = 'simulator';
+    const { result } = renderHook(() => useKiwiBridge());
+
+    await waitFor(() => expect(result.current.context?.uiSlug).toBe('global-admin'));
+    expect(result.current.context).toMatchObject({
+      userRole: 'admin',
+      placement: 'admin-panel',
+    });
+    expect(result.current.context?.classId).toBeUndefined();
   });
 
   it('uses simulator context and token when not embedded', async () => {

@@ -19,10 +19,19 @@ import { KiwiDocumentChunkSource } from './podcast/kiwi-document-chunk-source';
 import { PodcastChunkSourceService } from './podcast/podcast-chunk-source.service';
 import { PodcastAccessAuthService } from './podcast/podcast-access-auth.service';
 import { InterruptedJobRecoveryService } from './podcast/interrupted-job-recovery.service';
+import { PodcastAdminAuthService } from './podcast/podcast-admin-auth.service';
+import { PodcastAdminController } from './podcast/podcast-admin.controller';
+import { PodcastGlobalSettingsService } from './podcast/podcast-global-settings.service';
+import { PodcastVoiceSettingsService } from './podcast/podcast-voice-settings.service';
 
 @Module({
   imports: [DatabaseModule],
-  controllers: [HealthController, PodcastController, PodcastManagementController],
+  controllers: [
+    HealthController,
+    PodcastController,
+    PodcastManagementController,
+    PodcastAdminController,
+  ],
   providers: [
     KiwiMcpClient,
     LocalDemoChunkSource,
@@ -39,6 +48,9 @@ import { InterruptedJobRecoveryService } from './podcast/interrupted-job-recover
     PodcastAccessAuthService,
     InterruptedJobRecoveryService,
     PodcastManagementAuthService,
+    PodcastAdminAuthService,
+    PodcastGlobalSettingsService,
+    PodcastVoiceSettingsService,
     AudioStorageService,
     { provide: AUDIO_S3_CLIENT, useFactory: createAudioS3Client },
   ],

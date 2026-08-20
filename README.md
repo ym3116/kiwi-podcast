@@ -133,16 +133,19 @@ npm run infra:up
 npm run dev
 ```
 
-4. Register and enable the app:
+4. Register the app and, optionally, enable its class tab:
 
 ```bash
 ADMIN_TOKEN='<admin-jwt>' \
 KIWI_COOKIE='connect.sid=s%3A...' \
-CLASS_ID='<class-id>' \
 SECRET='<registration-secret>' \
 APP_URL=http://localhost:8000 \
 ./register.sh
 ```
+
+Omit `CLASS_ID` when you only need the global admin panel. Add
+`CLASS_ID='<class-id>'` to the same command when the class tab also needs to be
+enabled.
 
 This Kiwi build requires its browser-backed admin session as well as the JWT
 for admin routes. Copy the `connect.sid` value from browser DevTools under
@@ -155,7 +158,28 @@ Registration order:
 admin whitelist -> public app register -> admin/instructor enable in class
 ```
 
-Then open the class in Kiwi and use the `Podcast` tab.
+Then open the class in Kiwi and use the `Podcast` tab, or open the system-wide
+Podcast admin panel at:
+
+```text
+http://localhost:3001/admin/app/kiwi-podcast
+```
+
+If the local Kiwi host cannot mint a classless admin token, the panel asks for
+an authorization class ID and opens Kiwi's existing class-context admin route:
+
+```text
+http://localhost:3001/admin/app/kiwi-podcast/class/<class-id>
+```
+
+The selected class supplies authentication only. The page still reads and
+writes the singleton global settings record, so every class without an explicit
+class or episode override inherits the saved voices. Podcast must be enabled in
+the authorization class with `podcast:manage`.
+
+The registration contains two UIs under the same app slug: `student` uses the
+`class-tab` placement, while `global-admin` uses `admin-panel` and loads
+`http://localhost:8000/admin`. Re-running `register.sh` upserts both UIs.
 
 The registration helper creates or updates `podcast:manage`,
 `class:info:read`, and `class:materials:chunks:read` in both the whitelist and
@@ -163,6 +187,22 @@ class enablement. The embedded frontend probes the protected
 management API after receiving `kiwi:context` and `kiwi:appToken`; the
 **Manage** tab appears only when the API verifies a global admin or active class
 professor/instructor. Students and TAs receive `403`, so the tab remains hidden.
+
+The global admin panel prefers a classless Kiwi app token. The Podcast API also
+accepts a class-scoped token as a compatibility fallback, but only when Kiwi
+verifies the token subject as a **system admin**. Both paths require
+`appSlug=kiwi-podcast` and `podcast:manage`; the accepted claim pairs are
+`tokenScope=admin` with `classId=null`, or `tokenScope=class` with a non-empty
+`classId`. Class tokens from older Kiwi builds that predate `tokenScope` are
+also accepted when they have a non-empty `classId`; Kiwi verification, system
+admin role, app slug, expiry, subject, and scope checks still apply. Professors
+and instructors cannot use a class token to change global settings. Apply
+database migrations before opening the panel:
+
+```bash
+npm run db:deploy -w apps/api
+npm run db:generate -w apps/api
+```
 
 ## Access Control
 
@@ -176,6 +216,9 @@ the source of truth for identity and class access:
   user ID and `classId`. Personal routes do not accept `ownerUserId`.
 - **Manage** requires `class:info:read`, `podcast:manage`, and an effective Kiwi
   role of admin, professor, or instructor.
+- **Global Defaults** requires `podcast:manage` and a Kiwi-verified system admin.
+  A selected class may provide the token context, but does not narrow or relocate
+  the global settings record.
 - Class and personal audio endpoints require the bearer token. The web app
   downloads protected MP3s with `fetch`, creates one temporary browser Blob URL,
   and revokes it when the track changes.

@@ -39,6 +39,16 @@ model PodcastClass {
   @@map("podcast_classes")
 }
 
+model PodcastGlobalSettings {
+  key             String   @id
+  voiceDefaults   Json     @map("voice_defaults")
+  updatedByUserId String?  @map("updated_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("podcast_global_settings")
+}
+
 model SourceDocument {
   id             String          @id @default(uuid()) @db.Uuid
   classId        String          @map("class_id")

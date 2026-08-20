@@ -3,6 +3,7 @@ import {
   EpisodeVoiceOverrides,
   PersonalPodcast,
   PodcastDifficulty,
+  PodcastGlobalDefaultsState,
   PodcastManagementState,
   PodcastResponse,
   PodcastVoiceSettings,
@@ -10,6 +11,16 @@ import {
 } from '../types/podcast';
 
 const apiBase = () => (import.meta.env.VITE_PODCAST_API_BASE || 'http://localhost:8010').replace(/\/$/, '');
+
+function apiError(body: unknown, fallback: string): string {
+  if (!body || typeof body !== 'object') return fallback;
+  const errorBody = body as { message?: unknown; errorMessage?: unknown; error?: unknown };
+  if (Array.isArray(errorBody.message)) return errorBody.message.join(', ');
+  if (typeof errorBody.message === 'string') return errorBody.message;
+  if (typeof errorBody.errorMessage === 'string') return errorBody.errorMessage;
+  if (typeof errorBody.error === 'string') return errorBody.error;
+  return fallback;
+}
 
 export async function fetchClassPodcast(
   classId: string,
@@ -39,7 +50,7 @@ async function apiJson<T>(path: string, accessToken: string, init?: RequestInit)
     },
   });
   const body = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(body?.error || body?.errorMessage || `Podcast API returned ${response.status}`);
+  if (!response.ok) throw new Error(apiError(body, `Podcast API returned ${response.status}`));
   return body as T;
 }
 
@@ -130,6 +141,29 @@ export function updatePodcastDefaults(classId: string, token: string, defaults: 
   });
 }
 
+export function fetchPodcastGlobalDefaults(token: string) {
+  return apiJson<PodcastGlobalDefaultsState>('/api/podcast/admin/defaults', token);
+}
+
+export function updatePodcastGlobalDefaults(token: string, defaults: PodcastVoiceSettings) {
+  return apiJson<PodcastGlobalDefaultsState>('/api/podcast/admin/defaults', token, {
+    method: 'PATCH', body: JSON.stringify(defaults),
+  });
+}
+
+export async function previewGlobalVoice(profile: VoiceProfile, token: string) {
+  const response = await fetch(`${apiBase()}/api/podcast/admin/voice-preview`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(profile),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(apiError(body, `Voice preview returned ${response.status}`));
+  }
+  return response.blob();
+}
+
 export function updateManagedEpisode(
   classId: string,
   documentId: string,
@@ -171,7 +205,7 @@ export async function previewManagedVoice(classId: string, profile: VoiceProfile
   });
   if (!response.ok) {
     const body = await response.json().catch(() => null);
-    throw new Error(body?.error || `Voice preview returned ${response.status}`);
+    throw new Error(apiError(body, `Voice preview returned ${response.status}`));
   }
   return response.blob();
 }

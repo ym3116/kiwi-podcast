@@ -196,6 +196,14 @@ the whitelist + secret. See `kiwi-app.controller.ts:119` and
       "placement": "class-tab",              // class-tab | admin-panel | modal | dashboard-widget
       "allowedRoles": ["student", "ta", "professor", "instructor", "admin"],
       "tabOrder": 0
+    },
+    {
+      "uiSlug": "global-admin",
+      "uiName": "Podcast Admin",
+      "uiUrl": "http://localhost:8000/admin",
+      "placement": "admin-panel",
+      "allowedRoles": ["admin"],
+      "tabOrder": 0
     }
   ],
   "prompts": [
@@ -217,6 +225,11 @@ Notes:
   (`POST /api/kiwi-apps/:slug/prompts/:promptId/approve`). Until then the
   `llm:prompt:<id>` scope won't resolve.
 - DTO definitions: `src/kiwi-app/dto/register-app.dto.ts`.
+
+An enabled `admin-panel` UI appears under **App Admin Panels** at
+`/admin/app/:appSlug`; it is not enabled per class. Kiwi loads its registered
+`uiUrl`, appends app/user/UI context, and sends the normal `kiwi:context` and
+`kiwi:appToken` messages after `kiwi:ready`.
 
 ### 4.3 Admin/Instructor — enable the app in a class
 
@@ -310,6 +323,26 @@ has the scope — the user identity gate stops it.
 - Under the hood the host calls `POST /api/kiwi-apps/:slug/token` with the
   current `classId` (`kiwi-app.service.ts:800`). Token payload:
   `{ sub: userId, type: 'app_token', appSlug, classId, scopes }`, `expiresIn: 3600`.
+
+For a system-wide `admin-panel`, the host omits `classId`. Kiwi issues this
+classless token only to a system admin and adds `classId: null` plus
+`tokenScope: 'admin'`. It carries the whitelist ceiling because no per-class
+scope intersection exists. A classless token cannot call Kiwi's class-scoped
+App REST operations; it is intended for the external app's own global admin
+API, which must still verify the app slug, token scope, user role, and scopes.
+
+Kiwi also exposes `/admin/app/:appSlug/class/:classId`. It loads the app's
+`class-admin-panel` UI, or falls back to its `admin-panel` UI, and mints the
+normal class-scoped token. Kiwi Podcast uses this as a compatibility path when
+a host build cannot mint a classless token: the class supplies authentication
+only, while the Podcast API still updates its singleton global record. An app
+using this pattern must independently verify that the authenticated user is a
+**system admin**; class professor/instructor status is not sufficient for a
+global operation. The app and class must also grant the application-owned
+management scope. Older Kiwi class tokens may not include the newer
+`tokenScope: 'class'` marker, so a compatibility check may identify them by a
+non-empty `classId` only after Kiwi has verified the token, subject, app slug,
+expiry, system-admin role, and management scope.
 
 ### Using a token
 Send it as `Authorization: Bearer <accessToken>` to Kiwi. The guard detects
@@ -524,6 +557,7 @@ Register with `appType: "full"` and `mcpServerUrl`. Kiwi's agent can then call
 | App never appears as a tab | Not enabled for the class, or no `class-tab` UI matching the viewer's role. | Enable (4.3); check `placement`/`allowedRoles`. |
 | `kiwi:context` never arrives | `event.origin` mismatch — your `uiUrl` origin ≠ where the iframe is actually served. | Register the exact origin you serve from. |
 | `Missing required scope: …` | App token lacks the scope. | Add to `maxScopes` (whitelist) **and** `enabledScopes` (class). |
+| Global admin reports that it cannot obtain an app token | The host could not mint a classless admin token. | Enter a class ID in Podcast Admin and open `/admin/app/kiwi-podcast/class/<class-id>`. The class must have Podcast and `podcast:manage` enabled; Podcast still requires the authenticated user to be a system admin. |
 | AI works but data calls 401/403 | AI is proxied (user session); data calls need the **app token** + the user's role. | Request a token; ensure the user has rights. |
 | Iframe blank / refused to connect | Your app server sends `X-Frame-Options: DENY` or restrictive CSP. | Allow framing from Kiwi's origin. |
 

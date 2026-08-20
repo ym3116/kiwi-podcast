@@ -85,6 +85,12 @@ export interface PodcastVoiceSettings {
   speaker: VoiceProfile;
 }
 
+export interface PodcastGlobalDefaultsState {
+  defaults: PodcastVoiceSettings;
+  source: 'environment' | 'saved';
+  updatedAt: string | null;
+}
+
 export interface EpisodeVoiceOverrides {
   host?: VoiceProfile;
   speaker?: VoiceProfile;

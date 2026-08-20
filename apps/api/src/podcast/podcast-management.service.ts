@@ -7,15 +7,13 @@ import { PodcastChunkSourceService } from './podcast-chunk-source.service';
 import { PodcastArtifactStore } from './podcast-artifact.store';
 import { GeneratedPodcastScript, PodcastChunkInput, PodcastTurn } from './podcast-generation.types';
 import {
-  EpisodeVoiceOverrides,
   PodcastVoiceSettings,
-  PRESET_VOICES,
   UpdateManagedEpisodeInput,
-  VoiceProfile,
 } from './podcast-management.types';
+import { PodcastGlobalSettingsService } from './podcast-global-settings.service';
 import { PodcastService } from './podcast.service';
 import { ScriptGeneratorService } from './script-generator.service';
-import { TtsService } from './tts.service';
+import { PodcastVoiceSettingsService } from './podcast-voice-settings.service';
 
 @Injectable()
 export class PodcastManagementService {
@@ -29,7 +27,10 @@ export class PodcastManagementService {
     @Inject(AudioProductionService) private readonly audioProduction: AudioProductionService,
     @Inject(PodcastArtifactStore) private readonly artifacts: PodcastArtifactStore,
     @Inject(AudioStorageService) private readonly audioStorage: AudioStorageService,
-    @Inject(TtsService) private readonly tts: TtsService,
+    @Inject(PodcastGlobalSettingsService)
+    private readonly globalSettings: PodcastGlobalSettingsService,
+    @Inject(PodcastVoiceSettingsService)
+    private readonly voices: PodcastVoiceSettingsService,
   ) {}
 
   async getState(classId: string, accessToken: string) {
@@ -50,7 +51,9 @@ export class PodcastManagementService {
         },
       },
     });
-    const defaults = this.parseSettings(podcastClass.voiceDefaults) ?? this.tts.defaultVoiceSettings();
+    const defaults =
+      this.voices.parseSettings(podcastClass.voiceDefaults) ??
+      (await this.globalSettings.getDefaults());
     return {
       classId,
       className: podcastClass.title.replace(/\s+-\s+Podcast$/, ''),
@@ -58,7 +61,7 @@ export class PodcastManagementService {
       episodes: podcastClass.documents.flatMap((document) => {
         const episode = document.episode;
         if (!episode) return [];
-        const overrides = this.parseOverrides(episode.voiceOverrides);
+        const overrides = this.voices.parseOverrides(episode.voiceOverrides);
         const latest = episode.jobs[0];
         return [{
           documentId: document.kiwiDocumentId,
@@ -71,7 +74,7 @@ export class PodcastManagementService {
             revision: episode.draftRevision,
           },
           voiceOverrides: overrides,
-          effectiveVoices: this.resolveSettings(defaults, overrides),
+          effectiveVoices: this.voices.resolve(defaults, overrides),
           published: episode.publishedJob ? {
             jobId: episode.publishedJob.id,
             generatedAt: episode.publishedJob.finishedAt?.toISOString() ?? episode.publishedJob.updatedAt.toISOString(),
@@ -85,18 +88,20 @@ export class PodcastManagementService {
   }
 
   async updateDefaults(classId: string, value: unknown) {
-    const settings = this.validateSettings(value);
+    const settings = this.voices.validateSettings(value);
     const podcastClass = await this.prisma.podcastClass.findUniqueOrThrow({
       where: { classId },
       include: { documents: { include: { episode: true } } },
     });
-    const previous = this.parseSettings(podcastClass.voiceDefaults) ?? this.tts.defaultVoiceSettings();
+    const previous =
+      this.voices.parseSettings(podcastClass.voiceDefaults) ??
+      (await this.globalSettings.getDefaults());
     const affectedEpisodeIds = podcastClass.documents.flatMap((document) => {
       if (!document.episode) return [];
-      const overrides = this.parseOverrides(document.episode.voiceOverrides);
-      return this.sameJson(
-        this.resolveSettings(previous, overrides),
-        this.resolveSettings(settings, overrides),
+      const overrides = this.voices.parseOverrides(document.episode.voiceOverrides);
+      return this.voices.same(
+        this.voices.resolve(previous, overrides),
+        this.voices.resolve(settings, overrides),
       ) ? [] : [document.episode.id];
     });
     await this.prisma.$transaction([
@@ -125,7 +130,7 @@ export class PodcastManagementService {
       const turns = this.validateTurns(input.draft.turns);
       data.draftTurns = turns as unknown as Prisma.InputJsonValue;
       data.draftSummary = input.draft.summary?.trim() || '';
-      invalidatesRender ||= !this.sameJson(turns, this.parseTurns(episode.draftTurns))
+      invalidatesRender ||= !this.voices.same(turns, this.parseTurns(episode.draftTurns))
         || data.draftSummary !== (episode.draftSummary ?? '');
       if (input.draft.durationTargetMinutes !== undefined) {
         data.draftDurationTargetMinutes = this.duration(input.draft.durationTargetMinutes);
@@ -133,9 +138,12 @@ export class PodcastManagementService {
       }
     }
     if (input.voiceOverrides !== undefined) {
-      const overrides = this.validateOverrides(input.voiceOverrides);
+      const overrides = this.voices.validateOverrides(input.voiceOverrides);
       data.voiceOverrides = overrides as unknown as Prisma.InputJsonValue;
-      invalidatesRender ||= !this.sameJson(overrides, this.parseOverrides(episode.voiceOverrides));
+      invalidatesRender ||= !this.voices.same(
+        overrides,
+        this.voices.parseOverrides(episode.voiceOverrides),
+      );
     }
     if (invalidatesRender) data.draftRevision = { increment: 1 };
     await this.prisma.podcastEpisode.update({ where: { id: episode.id }, data });
@@ -172,8 +180,13 @@ export class PodcastManagementService {
     const episode = await this.episode(classId, documentId);
     const turns = this.validateTurns(this.parseTurns(episode.draftTurns));
     const podcastClass = await this.prisma.podcastClass.findUniqueOrThrow({ where: { classId } });
-    const defaults = this.parseSettings(podcastClass.voiceDefaults) ?? this.tts.defaultVoiceSettings();
-    const settings = this.resolveSettings(defaults, this.parseOverrides(episode.voiceOverrides));
+    const defaults =
+      this.voices.parseSettings(podcastClass.voiceDefaults) ??
+      (await this.globalSettings.getDefaults());
+    const settings = this.voices.resolve(
+      defaults,
+      this.voices.parseOverrides(episode.voiceOverrides),
+    );
     const script: GeneratedPodcastScript = {
       title: episode.titleOverride || episode.title,
       summary: episode.draftSummary || '',
@@ -255,7 +268,7 @@ export class PodcastManagementService {
   }
 
   previewVoice(profile: unknown) {
-    return this.tts.preview(this.validateProfile(profile));
+    return this.voices.preview(profile);
   }
 
   private async completeRender(
@@ -303,47 +316,6 @@ export class PodcastManagementService {
     }).catch(() => { throw new NotFoundException('Class podcast episode not found'); });
   }
 
-  private resolveSettings(defaults: PodcastVoiceSettings, overrides: EpisodeVoiceOverrides): PodcastVoiceSettings {
-    return {
-      host: overrides.host ?? defaults.host,
-      speaker: overrides.speaker ?? defaults.speaker,
-    };
-  }
-
-  private validateSettings(value: unknown): PodcastVoiceSettings {
-    const candidate = value as Partial<PodcastVoiceSettings>;
-    return {
-      host: this.validateProfile(candidate?.host),
-      speaker: this.validateProfile(candidate?.speaker),
-    };
-  }
-
-  private validateOverrides(value: unknown): EpisodeVoiceOverrides {
-    const candidate = value as EpisodeVoiceOverrides;
-    return {
-      ...(candidate?.host ? { host: this.validateProfile(candidate.host) } : {}),
-      ...(candidate?.speaker ? { speaker: this.validateProfile(candidate.speaker) } : {}),
-    };
-  }
-
-  private validateProfile(value: unknown): VoiceProfile {
-    const profile = value as Partial<VoiceProfile>;
-    if (profile?.mode !== 'preset' && profile?.mode !== 'custom') this.badRequest('Invalid voice mode');
-    if (!PRESET_VOICES.includes(profile.voice as VoiceProfile['voice'])) this.badRequest('Invalid preset voice');
-    const description = profile.description?.trim();
-    const referenceText = profile.referenceText?.trim();
-    if (!description || description.length > 500) this.badRequest('Voice description is required and must be at most 500 characters');
-    if (!referenceText || referenceText.length > 300) this.badRequest('Reference phrase is required and must be at most 300 characters');
-    if (!Number.isInteger(profile.seed) || Math.abs(profile.seed!) > 2147483647) this.badRequest('Voice seed must be an integer');
-    return {
-      mode: profile.mode,
-      voice: profile.voice as VoiceProfile['voice'],
-      description,
-      seed: profile.seed!,
-      referenceText,
-    };
-  }
-
   private validateTurns(value: unknown): PodcastTurn[] {
     if (!Array.isArray(value) || value.length === 0) this.badRequest('Script must contain at least one host or speaker line');
     return value.map((turn) => {
@@ -361,22 +333,8 @@ export class PodcastManagementService {
     return duration;
   }
 
-  private parseSettings(value: Prisma.JsonValue | null): PodcastVoiceSettings | null {
-    if (!value) return null;
-    try { return this.validateSettings(value); } catch { return null; }
-  }
-
-  private parseOverrides(value: Prisma.JsonValue | null): EpisodeVoiceOverrides {
-    if (!value) return {};
-    try { return this.validateOverrides(value); } catch { return {}; }
-  }
-
   private parseTurns(value: Prisma.JsonValue | null): PodcastTurn[] {
     return Array.isArray(value) ? value as unknown as PodcastTurn[] : [];
-  }
-
-  private sameJson(left: unknown, right: unknown) {
-    return JSON.stringify(left) === JSON.stringify(right);
   }
 
   private jobResponse(job: {

@@ -27,6 +27,7 @@ KIWI="${KIWI:-http://localhost:3000}"          # Kiwi backend base URL
 SLUG="${SLUG:-kiwi-podcast}"                    # app id (must match the app's appSlug)
 SECRET="${SECRET:-kiwi-podcast-local-dev-secret-0001}" # plaintext registration secret
 APP_URL="${APP_URL:-http://localhost:8000}"     # where YOU serve the Vite web app
+ADMIN_URL="${APP_URL%/}/admin"                  # global admin surface embedded by Kiwi
 ADMIN_TOKEN="${ADMIN_TOKEN:-}"                  # admin JWT (for whitelist + enable)
 KIWI_COOKIE="${KIWI_COOKIE:-}"                  # browser session cookie, e.g. connect.sid=s%3A...
 CLASS_ID="${CLASS_ID:-}"                         # optional: enable the app in this class
@@ -78,7 +79,7 @@ fi
 
 # -----------------------------------------------------------------------------
 say "2/3  Register '$SLUG' (public, idempotent) — POST /api/kiwi-apps/register"
-REG_RESPONSE=$(curl -sS -X POST "$KIWI/api/kiwi-apps/register" \
+if ! REG_RESPONSE=$(curl -sS --fail-with-body -X POST "$KIWI/api/kiwi-apps/register" \
   -H "Content-Type: application/json" \
   -d "{
     \"slug\": \"$SLUG\",
@@ -96,9 +97,21 @@ REG_RESPONSE=$(curl -sS -X POST "$KIWI/api/kiwi-apps/register" \
         \"placement\": \"class-tab\",
         \"allowedRoles\": [\"student\", \"ta\", \"professor\", \"instructor\", \"admin\"],
         \"tabOrder\": 0
+      },
+      {
+        \"uiSlug\": \"global-admin\",
+        \"uiName\": \"Podcast Admin\",
+        \"uiUrl\": \"$ADMIN_URL\",
+        \"placement\": \"admin-panel\",
+        \"allowedRoles\": [\"admin\"],
+        \"tabOrder\": 0
       }
     ]
-  }")
+  }"); then
+  echo "$REG_RESPONSE" | pp
+  warn "App registration failed — verify the approved whitelist entry and registration secret."
+  exit 1
+fi
 echo "$REG_RESPONSE" | pp
 
 # Pull the registered app's id out of the response (needed to enable it in a class).
@@ -141,3 +154,4 @@ echo "Next: make sure your app origin is allowed for CORS, then open the class."
 echo "  • In kiwi/.env:  FRONTEND_URL=\"http://localhost:3001,$APP_URL,http://localhost:8010\"  (then restart the backend)"
 echo "  • Start this app:  npm run dev"
 echo "  • Open the class in Kiwi — the \"Podcast\" tab should appear."
+echo "  • Open Kiwi's App Admin Panels — \"Podcast Admin\" should appear at /admin/app/$SLUG."
