@@ -15,6 +15,13 @@ export interface AudioProductionProgress {
 
 export interface AudioProductionMetadata {
   durationSeconds: number;
+  transcriptSegments: TranscriptTimingSegment[];
+}
+
+export interface TranscriptTimingSegment {
+  turnIndex: number;
+  startSeconds: number;
+  endSeconds: number;
 }
 
 interface WavFormat {
@@ -23,6 +30,68 @@ interface WavFormat {
   sampleRate: number;
   bitsPerSample: number;
   dataBytes: number;
+}
+
+interface IndexedPodcastTurn extends PodcastTurn {
+  turnIndex: number;
+}
+
+interface TranscriptTimingFragment {
+  turnIndex: number;
+  text: string;
+}
+
+function transcriptFragmentWeight(text: string): number {
+  return Math.max(1, text.trim().split(/\s+/).filter(Boolean).length);
+}
+
+export function allocateTranscriptTimings(
+  chunks: ReadonlyArray<ReadonlyArray<TranscriptTimingFragment>>,
+  chunkDurations: readonly number[],
+  gapSeconds: number,
+): TranscriptTimingSegment[] {
+  const byTurn = new Map<number, TranscriptTimingSegment>();
+  let chunkStart = 0;
+
+  chunks.forEach((chunk, chunkIndex) => {
+    const chunkDuration = chunkDurations[chunkIndex] ?? 0;
+    const totalWeight = chunk.reduce(
+      (sum, turn) => sum + transcriptFragmentWeight(turn.text),
+      0,
+    );
+    let fragmentStart = chunkStart;
+
+    chunk.forEach((turn, fragmentIndex) => {
+      const isLast = fragmentIndex === chunk.length - 1;
+      const fragmentDuration = isLast
+        ? chunkStart + chunkDuration - fragmentStart
+        : chunkDuration * (transcriptFragmentWeight(turn.text) / totalWeight);
+      const fragmentEnd = Math.max(fragmentStart, fragmentStart + fragmentDuration);
+      const existing = byTurn.get(turn.turnIndex);
+      byTurn.set(turn.turnIndex, {
+        turnIndex: turn.turnIndex,
+        startSeconds: existing?.startSeconds ?? fragmentStart,
+        endSeconds: fragmentEnd,
+      });
+      fragmentStart = fragmentEnd;
+    });
+
+    chunkStart += chunkDuration;
+    if (chunkIndex < chunks.length - 1) chunkStart += Math.max(0, gapSeconds);
+  });
+
+  return [...byTurn.values()].sort((a, b) => a.turnIndex - b.turnIndex);
+}
+
+export function applyTranscriptTimings(
+  turns: PodcastTurn[],
+  segments: TranscriptTimingSegment[],
+): PodcastTurn[] {
+  const timings = new Map(segments.map((segment) => [segment.turnIndex, segment]));
+  return turns.map((turn, turnIndex) => {
+    const timing = timings.get(turnIndex);
+    return timing ? { ...turn, startSeconds: timing.startSeconds, endSeconds: timing.endSeconds } : turn;
+  });
 }
 
 @Injectable()
@@ -39,16 +108,25 @@ export class AudioProductionService {
   constructor(@Inject(TtsService) private readonly tts: TtsService) {}
 
   buildChunks(turns: PodcastTurn[], maxChars = this.chunkChars): PodcastTurn[][] {
+    return this.buildIndexedChunks(turns, maxChars).map((chunk) =>
+      chunk.map(({ turnIndex: _turnIndex, ...turn }) => turn),
+    );
+  }
+
+  private buildIndexedChunks(
+    turns: PodcastTurn[],
+    maxChars = this.chunkChars,
+  ): IndexedPodcastTurn[][] {
     if (!Number.isFinite(maxChars) || maxChars < 32) {
       throw new Error('Podcast TTS chunk size must be at least 32 characters');
     }
 
-    const chunks: PodcastTurn[][] = [];
-    let current: PodcastTurn[] = [];
+    const chunks: IndexedPodcastTurn[][] = [];
+    let current: IndexedPodcastTurn[] = [];
     let currentChars = 0;
 
-    for (const original of turns) {
-      for (const turn of this.splitOversizedTurn(original, maxChars)) {
+    for (const [turnIndex, original] of turns.entries()) {
+      for (const turn of this.splitOversizedTurn({ ...original, turnIndex }, maxChars)) {
         const lineChars = this.formatTurn(turn).length;
         const nextChars = currentChars + (current.length > 0 ? 1 : 0) + lineChars;
         if (current.length > 0 && nextChars > maxChars) {
@@ -75,7 +153,7 @@ export class AudioProductionService {
     await this.cleanupStaleWorkspaces();
     const workspace = await mkdtemp(path.join(this.tempRoot, 'kiwi-podcast-audio-'));
     try {
-      const chunks = this.buildChunks(script.turns);
+      const chunks = this.buildIndexedChunks(script.turns);
       if (chunks.length === 0) throw new Error('Podcast script has no audio chunks');
 
       const runId = randomUUID().replace(/-/g, '').slice(0, 12);
@@ -94,11 +172,13 @@ export class AudioProductionService {
       this.validateWav(guestAnchor, 'HOST_B voice anchor');
 
       const chunkPaths: string[] = [];
+      const chunkDurations: number[] = [];
       let expectedFormat: WavFormat | undefined;
       for (const [index, chunk] of chunks.entries()) {
+        const speechTurns = chunk.map(({ turnIndex: _turnIndex, ...turn }) => turn);
         const wav = voiceSettings
-          ? await this.tts.synthesizeChunk(chunk, anchors, voiceSettings)
-          : await this.tts.synthesizeChunk(chunk, anchors);
+          ? await this.tts.synthesizeChunk(speechTurns, anchors, voiceSettings)
+          : await this.tts.synthesizeChunk(speechTurns, anchors);
         const format = this.validateWav(wav, `chunk ${index + 1}`);
         if (expectedFormat) this.assertCompatibleFormat(expectedFormat, format, index);
         else expectedFormat = format;
@@ -106,6 +186,7 @@ export class AudioProductionService {
         const chunkPath = path.join(workspace, `chunk-${this.pad(index)}.wav`);
         await writeFile(chunkPath, wav);
         chunkPaths.push(chunkPath);
+        chunkDurations.push(this.wavDurationSeconds(format));
         await onProgress?.({ completedChunks: index + 1, totalChunks: chunks.length });
       }
 
@@ -162,15 +243,21 @@ export class AudioProductionService {
       const mp3 = await readFile(mp3Path);
       if (mp3.length === 0) throw new Error('FFmpeg produced an empty MP3');
       const masterFormat = this.validateWav(await readFile(masterPath), 'final podcast');
-      const bytesPerSecond = masterFormat.sampleRate * masterFormat.channels * (masterFormat.bitsPerSample / 8);
-      await onMetadata?.({ durationSeconds: masterFormat.dataBytes / bytesPerSecond });
+      await onMetadata?.({
+        durationSeconds: this.wavDurationSeconds(masterFormat),
+        transcriptSegments: allocateTranscriptTimings(
+          chunks,
+          chunkDurations,
+          this.gapSeconds,
+        ),
+      });
       return mp3;
     } finally {
       await rm(workspace, { recursive: true, force: true });
     }
   }
 
-  private splitOversizedTurn(turn: PodcastTurn, maxChars: number): PodcastTurn[] {
+  private splitOversizedTurn(turn: IndexedPodcastTurn, maxChars: number): IndexedPodcastTurn[] {
     const clean = { ...turn, text: turn.text.trim() };
     if (!clean.text) return [];
     const maxTextChars = maxChars - this.formatTurn({ ...clean, text: '' }).length;
@@ -194,7 +281,11 @@ export class AudioProductionService {
       }
     }
     if (current) pieces.push(current);
-    return pieces.filter(Boolean).map((text) => ({ speaker: turn.speaker, text }));
+    return pieces.filter(Boolean).map((text) => ({
+      speaker: turn.speaker,
+      text,
+      turnIndex: turn.turnIndex,
+    }));
   }
 
   private splitText(text: string, maxChars: number): string[] {
@@ -223,6 +314,11 @@ export class AudioProductionService {
   private formatTurn(turn: PodcastTurn): string {
     const tag = turn.speaker === 'HOST_A' ? 'SPEAKER0' : 'SPEAKER1';
     return `[${tag}] ${turn.text.trim()}`;
+  }
+
+  private wavDurationSeconds(format: WavFormat): number {
+    const bytesPerSecond = format.sampleRate * format.channels * (format.bitsPerSample / 8);
+    return bytesPerSecond > 0 ? format.dataBytes / bytesPerSecond : 0;
   }
 
   private validateWav(wav: Buffer, label: string): WavFormat {

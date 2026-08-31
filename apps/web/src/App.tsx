@@ -9,11 +9,13 @@ import {
   retryMyPodcast,
 } from './api/podcastApi';
 import { simulatorPodcast } from './bridge/simulator';
+import { buildTranscriptKiwiContext } from './bridge/podcastContext';
 import { useKiwiBridge } from './bridge/useKiwiBridge';
 import { MyPodcasts } from './components/MyPodcasts';
 import { PlayerBar } from './components/PlayerBar';
 import { PodcastCreator } from './components/PodcastCreator';
 import { PodcastDetail } from './components/PodcastDetail';
+import { TranscriptLineSelection } from './components/TranscriptReader';
 import { PodcastOverview } from './components/PodcastOverview';
 import { PodcastManager } from './components/PodcastManager';
 import { PersonalPodcast, PodcastEpisode, PodcastManagementState, PodcastResponse } from './types/podcast';
@@ -164,6 +166,13 @@ export function App() {
     if (!selectedItem || selectedItem.id !== currentTrack?.id || selectedItem.source !== currentTrack.source || audioDuration === null) return selectedItem;
     return { ...selectedItem, durationLabel: formatDuration(audioDuration) };
   }, [audioDuration, currentTrack, selectedItem]);
+  const detailKey = detailItem ? podcastViewKey(detailItem) : null;
+  const isDetailCurrentTrack = Boolean(detailKey && detailKey === currentKey);
+  const detailDurationSeconds = detailItem
+    ? isDetailCurrentTrack
+      ? durationSeconds
+      : durationLabelToSeconds(detailItem.durationLabel)
+    : 0;
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -324,6 +333,24 @@ export function App() {
 
   const cycleSpeed = () => setPlaybackRate((rate) => playbackRates[(playbackRates.indexOf(rate) + 1) % playbackRates.length]);
 
+  const pauseForTranscriptQuestion = () => {
+    audioRef.current?.pause();
+    setPlayingKey(null);
+    setPreviewStopSignal((signal) => signal + 1);
+  };
+
+  const askKiwiAboutTranscript = (
+    item: PodcastViewItem,
+    selection: TranscriptLineSelection,
+  ) => {
+    bridge.updateContext(buildTranscriptKiwiContext({
+      className: bridge.context?.className,
+      item,
+      selection,
+    }));
+    bridge.setChatDisplayMode('sidepanel');
+  };
+
   const switchTab = (tab: PodcastTab) => {
     setPodcastTab(tab);
     setSelectedDetail(null);
@@ -459,8 +486,15 @@ export function App() {
           item={detailItem}
           isPlaying={playingKey === podcastViewKey(detailItem)}
           isBusy={audioLoadingKey === podcastViewKey(detailItem)}
+          currentTime={isDetailCurrentTrack ? currentTime : 0}
+          duration={detailDurationSeconds}
+          isCurrentTrack={isDetailCurrentTrack}
+          mode={bridge.mode}
           error={generationError}
           onBack={closeDetail}
+          onPause={pauseForTranscriptQuestion}
+          onSeek={seek}
+          onAskLine={(selection) => askKiwiAboutTranscript(detailItem, selection)}
           onTogglePlay={() => {
             if (detailItem.source === 'class') {
               const episode = podcastData?.episodes.find((item) => item.id === detailItem.id);

@@ -1,12 +1,20 @@
 import { AlertCircle, ArrowLeft, Clock3, FileText, Headphones, Loader2, Pause, Play, RotateCcw } from 'lucide-react';
 import { PodcastViewItem } from '../types/podcastView';
+import { TranscriptLineSelection, TranscriptReader } from './TranscriptReader';
 
 interface PodcastDetailProps {
   item: PodcastViewItem;
   isPlaying: boolean;
   isBusy: boolean;
+  currentTime: number;
+  duration: number;
+  isCurrentTrack: boolean;
+  mode: 'live' | 'simulator';
   error: string | null;
   onBack: () => void;
+  onPause: () => void;
+  onSeek: (time: number) => void;
+  onAskLine: (selection: TranscriptLineSelection) => void;
   onTogglePlay: () => void | Promise<void>;
   onRetry?: () => void | Promise<void>;
 }
@@ -15,8 +23,15 @@ export function PodcastDetail({
   item,
   isPlaying,
   isBusy,
+  currentTime,
+  duration,
+  isCurrentTrack,
+  mode,
   error,
   onBack,
+  onPause,
+  onSeek,
+  onAskLine,
   onTogglePlay,
   onRetry,
 }: PodcastDetailProps) {
@@ -108,14 +123,17 @@ export function PodcastDetail({
           <span className="script-source"><FileText size={16} /> {item.sourceLabel}</span>
         </div>
         {item.transcript.length > 0 ? (
-          <div className="transcript">
-            {item.transcript.map((turn, index) => (
-              <div className={turn.speaker ? 'transcript-turn' : 'transcript-paragraph'} key={`${turn.speaker ?? 'paragraph'}-${index}`}>
-                {turn.speaker ? <span>{turn.speaker}</span> : null}
-                <p>{turn.text}</p>
-              </div>
-            ))}
-          </div>
+          <TranscriptReader
+            itemKey={`${item.source}:${item.id}`}
+            turns={item.transcript}
+            currentTime={currentTime}
+            duration={duration}
+            isCurrentTrack={isCurrentTrack}
+            mode={mode}
+            onPause={onPause}
+            onSeek={onSeek}
+            onAsk={onAskLine}
+          />
         ) : (
           <div className="script-empty">
             <FileText size={26} />

@@ -31,7 +31,9 @@ Podcast audio uses the TTS service's two-phase multi-speaker protocol. The API
 builds one reference-voice anchor for each host, sends complete alternating
 turns in bounded multi-speaker chunks, validates and concatenates the returned
 WAV files, then encodes one 192 kbps MP3 for MinIO delivery. Temporary audio is
-removed after both successful and failed generation.
+removed after both successful and failed generation. Chunk durations are also
+measured and apportioned back to the original speaker turns so generated class
+and personal podcasts carry synchronized transcript timing.
 
 3. Create `apps/api/.env`:
 
@@ -216,6 +218,21 @@ database migrations before opening the panel:
 npm run db:deploy -w apps/api
 npm run db:generate -w apps/api
 ```
+
+## Student Transcript And Ask Kiwi
+
+Ready class and personal podcasts show a synchronized transcript in an embedded
+scroll reader. The active turn follows playback until the student scrolls or
+selects another turn; **Locate current line** restores follow mode. New renders
+use their stored, chunk-measured timing, while older untimed podcasts receive a
+word-weighted estimate bounded by the audio duration.
+
+**Ask Kiwi** pauses playback and sends the selected turn, neighboring turns,
+episode and class details, source-material names, and Podcast capability limits
+to the global chat with `kiwi:updateContext`. The app then requests the
+`sidepanel` chat layout with `kiwi:setChatDisplayMode`. It neither prefills nor
+submits a student message. Standalone Simulator mode demonstrates the selection
+flow without claiming that Kiwi Chat received the context.
 
 ## Access Control
 

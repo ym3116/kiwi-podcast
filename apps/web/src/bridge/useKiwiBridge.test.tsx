@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useKiwiBridge } from './useKiwiBridge';
 
@@ -57,6 +57,51 @@ describe('useKiwiBridge', () => {
       if (originalWindowParent) {
         Object.defineProperty(window, 'parent', originalWindowParent);
       }
+    }
+  });
+
+  it('updates global chat context and display mode using the verified host origin', async () => {
+    const postMessage = vi.fn();
+    (window as Window & { __KIWI_PODCAST_FORCE_MODE__?: 'live' }).__KIWI_PODCAST_FORCE_MODE__ =
+      'live';
+    const originalWindowParent = Object.getOwnPropertyDescriptor(window, 'parent');
+    Object.defineProperty(window, 'parent', {
+      configurable: true,
+      value: { postMessage },
+    });
+
+    try {
+      const { result } = renderHook(() => useKiwiBridge());
+      act(() => {
+        window.dispatchEvent(new MessageEvent('message', {
+          origin: 'https://kiwi.example',
+          data: {
+            type: 'kiwi:context',
+            payload: { classId: 'class-1', appSlug: 'kiwi-podcast', userId: 'student-1' },
+          },
+        }));
+      });
+      await waitFor(() => expect(result.current.hostOrigin).toBe('https://kiwi.example'));
+
+      act(() => {
+        result.current.updateContext('Selected transcript line');
+        result.current.setChatDisplayMode('sidepanel');
+      });
+
+      expect(postMessage).toHaveBeenCalledWith(
+        { type: 'kiwi:updateContext', payload: { context: 'Selected transcript line' } },
+        'https://kiwi.example',
+      );
+      expect(postMessage).toHaveBeenCalledWith(
+        { type: 'kiwi:setChatDisplayMode', payload: { mode: 'sidepanel' } },
+        'https://kiwi.example',
+      );
+      expect(postMessage).not.toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'kiwi:askAI' }),
+        expect.anything(),
+      );
+    } finally {
+      if (originalWindowParent) Object.defineProperty(window, 'parent', originalWindowParent);
     }
   });
 });

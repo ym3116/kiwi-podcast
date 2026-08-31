@@ -1,4 +1,4 @@
-import { PodcastEpisode } from '../types/podcast';
+import type { PodcastEpisode, PodcastTranscriptTurn } from '../types/podcast';
 
 export type PodcastJobStatus = PodcastEpisode['status'];
 
@@ -24,10 +24,7 @@ export interface PodcastChunkInput {
   chunks: PodcastChunk[];
 }
 
-export interface PodcastTurn {
-  speaker: 'HOST_A' | 'HOST_B';
-  text: string;
-}
+export type PodcastTurn = PodcastTranscriptTurn;
 
 export interface GeneratedPodcastScript {
   title: string;

@@ -136,6 +136,65 @@ describe('PodcastManagementService', () => {
       { documentName: 'Canonical Kiwi document' },
     );
   });
+
+  it('persists timed turns for managed renders', async () => {
+    const prisma = basePrisma();
+    prisma.podcastEpisode.findFirstOrThrow.mockResolvedValue(episode());
+    prisma.podcastClass.findUniqueOrThrow.mockResolvedValue({
+      voiceDefaults: settings('alloy', 'echo'),
+    });
+    const artifacts = {
+      beginJob: vi.fn().mockResolvedValue({
+        started: true,
+        job: {
+          id: 'job-1', episodeId: 'episode-doc-1', classId: 'class-1', documentId: 'doc-1',
+          status: 'generating', updatedAt: '2026-08-20T00:00:00.000Z',
+        },
+      }),
+      updateJobProgress: vi.fn().mockResolvedValue(undefined),
+      writeScript: vi.fn().mockResolvedValue({ scriptPath: 'postgres://script/job-1' }),
+      updateScriptTurns: vi.fn().mockResolvedValue(undefined),
+      writeAudio: vi.fn().mockResolvedValue({ storageKey: 'class-episodes/job-1.mp3' }),
+      finishJob: vi.fn().mockResolvedValue({ status: 'ready' }),
+    };
+    const audio = {
+      produce: vi.fn(async (_script, _progress, _settings, onMetadata) => {
+        await onMetadata?.({
+          durationSeconds: 6,
+          transcriptSegments: [{ turnIndex: 0, startSeconds: 0, endSeconds: 6 }],
+        });
+        return Buffer.from([1]);
+      }),
+    };
+    const service = new PodcastManagementService(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      audio as never,
+      artifacts as never,
+      { delete: vi.fn() } as never,
+      { getDefaults: vi.fn().mockResolvedValue(settings('alloy', 'echo')) } as never,
+      new PodcastVoiceSettingsService({
+        defaultVoiceSettings: () => settings('alloy', 'echo'),
+        preview: vi.fn(),
+      } as never),
+    );
+
+    await service.startRender('class-1', 'doc-1');
+    await vi.waitFor(() => expect(artifacts.finishJob).toHaveBeenCalled());
+
+    expect(artifacts.updateScriptTurns).toHaveBeenCalledWith(
+      'episode-doc-1',
+      [{ speaker: 'HOST_A', text: 'Hello.', startSeconds: 0, endSeconds: 6 }],
+      'job-1',
+    );
+    expect(artifacts.finishJob).toHaveBeenCalledWith(
+      'job-1',
+      'episode-doc-1',
+      expect.objectContaining({ durationSeconds: 6, status: 'ready' }),
+    );
+  });
 });
 
 function management(

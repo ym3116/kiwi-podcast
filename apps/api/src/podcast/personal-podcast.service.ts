@@ -6,7 +6,11 @@ import { PodcastChunkSourceService } from './podcast-chunk-source.service';
 import { PodcastMaterial } from './podcast-chunk-source';
 import { PodcastDifficulty } from './podcast-generation.types';
 import { ScriptGeneratorService } from './script-generator.service';
-import { AudioProductionService } from './audio-production.service';
+import {
+  applyTranscriptTimings,
+  AudioProductionMetadata,
+  AudioProductionService,
+} from './audio-production.service';
 
 export interface CreatePersonalPodcastInput {
   prompt: string;
@@ -174,16 +178,27 @@ export class PersonalPodcastService {
         summary: script.summary,
         turns: script.turns as unknown as Prisma.InputJsonValue,
       });
-      const audio = await this.audioProduction.produce(script, async ({ completedChunks, totalChunks }) => {
-        const progress = 55 + Math.round((completedChunks / totalChunks) * 30);
-        await this.stage(
-          id,
-          'generating_audio',
-          progress,
-          `Generating conversation — chunk ${completedChunks} of ${totalChunks}`,
-        );
+      let audioMetadata: AudioProductionMetadata | undefined;
+      const audio = await this.audioProduction.produce(
+        script,
+        async ({ completedChunks, totalChunks }) => {
+          const progress = 55 + Math.round((completedChunks / totalChunks) * 30);
+          await this.stage(
+            id,
+            'generating_audio',
+            progress,
+            `Generating conversation — chunk ${completedChunks} of ${totalChunks}`,
+          );
+        },
+        undefined,
+        (metadata) => { audioMetadata = metadata; },
+      );
+      const timedTurns = audioMetadata
+        ? applyTranscriptTimings(script.turns, audioMetadata.transcriptSegments)
+        : script.turns;
+      await this.stage(id, 'saving', 95, 'Saving your podcast', {
+        turns: timedTurns as unknown as Prisma.InputJsonValue,
       });
-      await this.stage(id, 'saving', 95, 'Saving your podcast');
       const storageKey = `personal/${this.safeKeyPart(podcast.ownerUserId)}/${id}.mp3`;
       await this.audioStorage.upload(storageKey, audio);
       try {

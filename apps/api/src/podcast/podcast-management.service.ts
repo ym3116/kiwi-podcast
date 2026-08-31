@@ -2,7 +2,11 @@ import { ConflictException, HttpException, HttpStatus, Inject, Injectable, NotFo
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { AudioStorageService } from '../storage/audio-storage.service';
-import { AudioProductionService } from './audio-production.service';
+import {
+  applyTranscriptTimings,
+  AudioProductionMetadata,
+  AudioProductionService,
+} from './audio-production.service';
 import { PodcastChunkSourceService } from './podcast-chunk-source.service';
 import { PodcastArtifactStore } from './podcast-artifact.store';
 import { GeneratedPodcastScript, PodcastChunkInput, PodcastTurn } from './podcast-generation.types';
@@ -280,7 +284,7 @@ export class PodcastManagementService {
     settings: PodcastVoiceSettings,
   ) {
     try {
-      let durationSeconds: number | undefined;
+      let audioMetadata: AudioProductionMetadata | undefined;
       await this.artifacts.updateJobProgress(jobId, 12, 'Saving script snapshot');
       await this.artifacts.writeScript(episodeId, script, jobId);
       await this.artifacts.updateJobProgress(jobId, 22, 'Building speaker voices');
@@ -288,8 +292,15 @@ export class PodcastManagementService {
         const progress = 25 + Math.round((completedChunks / totalChunks) * 65);
         await this.artifacts.updateJobProgress(jobId, progress, `Generating audio — chunk ${completedChunks} of ${totalChunks}`);
       }, settings, (metadata) => {
-        durationSeconds = metadata.durationSeconds;
+        audioMetadata = metadata;
       });
+      if (audioMetadata) {
+        await this.artifacts.updateScriptTurns(
+          episodeId,
+          applyTranscriptTimings(script.turns, audioMetadata.transcriptSegments),
+          jobId,
+        );
+      }
       await this.artifacts.updateJobProgress(jobId, 94, 'Saving preview audio');
       await this.artifacts.writeAudio(episodeId, audio, jobId);
       await this.artifacts.finishJob(jobId, episodeId, {
@@ -297,7 +308,7 @@ export class PodcastManagementService {
         documentId,
         status: 'ready',
         generatedAt: new Date().toISOString(),
-        durationSeconds,
+        durationSeconds: audioMetadata?.durationSeconds,
       });
     } catch (error) {
       await this.artifacts.finishJob(jobId, episodeId, {

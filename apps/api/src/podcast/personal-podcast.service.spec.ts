@@ -153,7 +153,15 @@ describe('PersonalPodcastService audio ownership', () => {
         turns: [{ speaker: 'HOST_A', text: 'Hello.' }],
       }),
     };
-    const audio = { produce: vi.fn().mockResolvedValue(Buffer.from([1])) };
+    const audio = {
+      produce: vi.fn(async (_script, _progress, _settings, onMetadata) => {
+        await onMetadata?.({
+          durationSeconds: 4,
+          transcriptSegments: [{ turnIndex: 0, startSeconds: 0, endSeconds: 4 }],
+        });
+        return Buffer.from([1]);
+      }),
+    };
     const storage = {
       upload: vi.fn().mockResolvedValue(undefined),
       delete: vi.fn().mockResolvedValue(undefined),
@@ -193,6 +201,13 @@ describe('PersonalPodcastService audio ownership', () => {
     expect(JSON.stringify(prisma.personalPodcast.create.mock.calls[0][0].data)).not.toContain(
       'Live text',
     );
+    await vi.waitFor(() => {
+      expect(prisma.personalPodcast.update).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({
+          turns: [{ speaker: 'HOST_A', text: 'Hello.', startSeconds: 0, endSeconds: 4 }],
+        }),
+      }));
+    });
   });
 
   it('maps a missing Kiwi chunk scope to a clear forbidden response', async () => {

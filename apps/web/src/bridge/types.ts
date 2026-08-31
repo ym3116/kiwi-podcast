@@ -19,6 +19,8 @@ export interface KiwiAppToken {
   appSlug?: string;
 }
 
+export type KiwiChatDisplayMode = 'modal' | 'sidepanel' | 'snap' | 'fullscreen';
+
 export type KiwiBridgeState = {
   mode: 'simulator' | 'live';
   connected: boolean;

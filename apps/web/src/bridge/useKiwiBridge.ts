@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useMemo, useReducer } from 'react';
 import { simulatorContext, simulatorToken } from './simulator';
-import { KiwiAppToken, KiwiBridgeAction, KiwiBridgeState, KiwiContext } from './types';
+import {
+  KiwiAppToken,
+  KiwiBridgeAction,
+  KiwiBridgeState,
+  KiwiChatDisplayMode,
+  KiwiContext,
+} from './types';
 
 const params = new URLSearchParams(window.location.search);
 
@@ -111,6 +117,13 @@ export function useKiwiBridge() {
     [post],
   );
 
+  const setChatDisplayMode = useCallback(
+    (mode: KiwiChatDisplayMode) => {
+      post('kiwi:setChatDisplayMode', { mode });
+    },
+    [post],
+  );
+
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
       const { type, payload } = event.data || {};
@@ -161,7 +174,8 @@ export function useKiwiBridge() {
       sendReady,
       requestToken,
       updateContext,
+      setChatDisplayMode,
     }),
-    [requestToken, sendReady, state, updateContext],
+    [requestToken, sendReady, setChatDisplayMode, state, updateContext],
   );
 }

@@ -24,7 +24,15 @@ describe('PodcastGenerationService', () => {
           turns: [{ speaker: 'HOST_A', text: 'Welcome.' }],
         }),
       } as unknown as ScriptGeneratorService,
-      { produce: vi.fn().mockResolvedValue(Buffer.from([1])) } as unknown as AudioProductionService,
+      {
+        produce: vi.fn(async (_script, _progress, _settings, onMetadata) => {
+          await onMetadata?.({
+            durationSeconds: 12,
+            transcriptSegments: [{ turnIndex: 0, startSeconds: 0, endSeconds: 12 }],
+          });
+          return Buffer.from([1]);
+        }),
+      } as unknown as AudioProductionService,
     );
 
     const result = await service.generate('class-1', 'doc-1', 'token');
@@ -32,6 +40,10 @@ describe('PodcastGenerationService', () => {
     expect(store.statuses).toEqual(['generating', 'ready']);
     expect(getChunks).toHaveBeenCalledWith('class-1', 'doc-1', 'token');
     expect(result.job.status).toBe('ready');
+    expect(result.job.durationSeconds).toBe(12);
+    expect(result.episode?.transcript).toEqual([
+      { speaker: 'HOST_A', text: 'Welcome.', startSeconds: 0, endSeconds: 12 },
+    ]);
     expect(result.episode?.audioUrl).toContain(
       '/api/podcast/classes/class-1/audio/episode-doc-1',
     );
@@ -139,6 +151,10 @@ function inMemoryStore() {
     writeScript: vi.fn(async (episodeId: string, script: any) => {
       scripts.set(episodeId, script);
       return { scriptPath: `/scripts/${episodeId}.json` };
+    }),
+    updateScriptTurns: vi.fn(async (episodeId: string, turns: any) => {
+      const script = scripts.get(episodeId);
+      scripts.set(episodeId, { ...script, turns });
     }),
     readScript: vi.fn(async (episodeId: string) => scripts.get(episodeId) ?? null),
     writeAudio: vi.fn(async (episodeId: string) => ({ storageKey: `class-episodes/${episodeId}.mp3` })),

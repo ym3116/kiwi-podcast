@@ -188,6 +188,19 @@ export class PodcastArtifactStore {
     return { scriptPath: `postgres://podcast_scripts/${job.id}` };
   }
 
+  async updateScriptTurns(
+    episodeId: string,
+    turns: GeneratedPodcastScript['turns'],
+    jobId?: string,
+  ): Promise<void> {
+    const job = await this.renderJob(episodeId, jobId);
+    if (!job) throw new Error('Podcast render job is not available');
+    await this.prisma.podcastScript.update({
+      where: { jobId: job.id },
+      data: { turns: turns as unknown as Prisma.InputJsonValue },
+    });
+  }
+
   async readScript(episodeId: string): Promise<GeneratedPodcastScript | null> {
     const script = await this.prisma.podcastScript.findFirst({
       where: { episodeId },

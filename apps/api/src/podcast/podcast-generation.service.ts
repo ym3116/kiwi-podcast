@@ -4,7 +4,11 @@ import { PodcastChunkSourceService } from './podcast-chunk-source.service';
 import { PodcastArtifactStore } from './podcast-artifact.store';
 import { GeneratePodcastResult, PodcastJob } from './podcast-generation.types';
 import { ScriptGeneratorService } from './script-generator.service';
-import { AudioProductionService } from './audio-production.service';
+import {
+  applyTranscriptTimings,
+  AudioProductionMetadata,
+  AudioProductionService,
+} from './audio-production.service';
 
 @Injectable()
 export class PodcastGenerationService {
@@ -38,7 +42,19 @@ export class PodcastGenerationService {
       const chunks = await this.chunkSource.getChunks(classId, documentId, accessToken);
       const script = await this.scripts.generate(chunks);
       const { scriptPath } = await this.artifacts.writeScript(episodeId, script);
-      const audio = await this.audioProduction.produce(script);
+      let audioMetadata: AudioProductionMetadata | undefined;
+      const audio = await this.audioProduction.produce(
+        script,
+        undefined,
+        undefined,
+        (metadata) => { audioMetadata = metadata; },
+      );
+      if (audioMetadata) {
+        await this.artifacts.updateScriptTurns(
+          episodeId,
+          applyTranscriptTimings(script.turns, audioMetadata.transcriptSegments),
+        );
+      }
       const { storageKey } = await this.artifacts.writeAudio(episodeId, audio);
       const generatedAt = new Date().toISOString();
 
@@ -49,6 +65,7 @@ export class PodcastGenerationService {
         scriptPath,
         audioStorageKey: storageKey,
         audioUrl: this.audioUrl(classId, episodeId),
+        durationSeconds: audioMetadata?.durationSeconds,
         generatedAt,
       });
 
@@ -116,6 +133,7 @@ export class PodcastGenerationService {
       title: titleOverride || generated.title,
       durationLabel: generated.durationLabel,
       script: generated.script,
+      transcript: generated.transcript,
       status: generated.status,
       audioUrl: generated.audioUrl,
       generatedAt: generated.generatedAt,
@@ -142,6 +160,7 @@ export class PodcastGenerationService {
       materialType: 'document',
       durationLabel: this.durationLabel(job.durationSeconds),
       script: script.turns.map((turn) => `${turn.speaker}: ${turn.text}`).join('\n\n'),
+      transcript: script.turns,
       status: job.status,
       audioUrl: job.audioUrl,
       generatedAt: job.generatedAt,

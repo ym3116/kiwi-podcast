@@ -3,7 +3,10 @@ import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { AudioProductionService } from './audio-production.service';
+import {
+  allocateTranscriptTimings,
+  AudioProductionService,
+} from './audio-production.service';
 
 const ffmpegAvailable = spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' }).status === 0;
 const tempRoots: string[] = [];
@@ -15,6 +18,45 @@ afterEach(async () => {
 });
 
 describe('AudioProductionService', () => {
+  it('allocates single-turn and weighted multi-turn chunk timings', () => {
+    expect(allocateTranscriptTimings(
+      [[{ turnIndex: 0, text: 'Only turn' }]],
+      [8],
+      0.25,
+    )).toEqual([
+      { turnIndex: 0, startSeconds: 0, endSeconds: 8 },
+    ]);
+
+    expect(allocateTranscriptTimings(
+      [[
+        { turnIndex: 0, text: 'Two words' },
+        { turnIndex: 1, text: 'This has four words' },
+      ]],
+      [12],
+      0.25,
+    )).toEqual([
+      { turnIndex: 0, startSeconds: 0, endSeconds: 4 },
+      { turnIndex: 1, startSeconds: 4, endSeconds: 12 },
+    ]);
+  });
+
+  it('aggregates oversized turn fragments across chunks and preserves inter-chunk gaps', () => {
+    expect(allocateTranscriptTimings(
+      [
+        [{ turnIndex: 0, text: 'First fragment' }],
+        [
+          { turnIndex: 0, text: 'Second fragment' },
+          { turnIndex: 1, text: 'Following turn' },
+        ],
+      ],
+      [3, 6],
+      0.5,
+    )).toEqual([
+      { turnIndex: 0, startSeconds: 0, endSeconds: 6.5 },
+      { turnIndex: 1, startSeconds: 6.5, endSeconds: 9.5 },
+    ]);
+  });
+
   it('groups complete turns into ordered multi-speaker chunks', () => {
     const service = new AudioProductionService({} as never);
     const chunks = service.buildChunks(
@@ -97,8 +139,15 @@ describe('AudioProductionService', () => {
       expect.objectContaining({ SPEAKER0: expect.any(String), SPEAKER1: expect.any(String) }),
     );
     expect(progress).toHaveBeenLastCalledWith({ completedChunks: 2, totalChunks: 2 });
-    expect(metadata).toHaveBeenCalledWith({ durationSeconds: expect.any(Number) });
+    expect(metadata).toHaveBeenCalledWith({
+      durationSeconds: expect.any(Number),
+      transcriptSegments: [
+        { turnIndex: 0, startSeconds: 0, endSeconds: 0.1 },
+        { turnIndex: 1, startSeconds: 0.11, endSeconds: expect.any(Number) },
+      ],
+    });
     expect(metadata.mock.calls[0][0].durationSeconds).toBeGreaterThan(0);
+    expect(metadata.mock.calls[0][0].transcriptSegments[1].endSeconds).toBeCloseTo(0.21);
     expect(await readdir(root)).toEqual([]);
   });
 });

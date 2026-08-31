@@ -6,6 +6,13 @@ export interface PodcastSummary {
   coverTheme: string;
 }
 
+export interface PodcastTranscriptTurn {
+  speaker: 'HOST_A' | 'HOST_B';
+  text: string;
+  startSeconds?: number;
+  endSeconds?: number;
+}
+
 export interface PodcastEpisode {
   id: string;
   documentId: string;
@@ -15,6 +22,7 @@ export interface PodcastEpisode {
   materialType: string;
   durationLabel: string;
   script: string;
+  transcript?: PodcastTranscriptTurn[];
   status: 'placeholder' | 'generating' | 'ready' | 'failed';
   audioUrl?: string;
   generatedAt?: string;
@@ -60,7 +68,7 @@ export interface PersonalPodcast {
   progressPercent: number;
   statusMessage: string;
   selectedMaterials: DemoMaterial[];
-  turns?: Array<{ speaker: 'HOST_A' | 'HOST_B'; text: string }>;
+  turns?: PodcastTranscriptTurn[];
   audioUrl?: string;
   errorMessage?: string;
   startedAt?: string;

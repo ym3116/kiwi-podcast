@@ -5,6 +5,8 @@ export type PodcastSource = 'class' | 'personal';
 export interface TranscriptTurn {
   speaker?: string;
   text: string;
+  startSeconds?: number;
+  endSeconds?: number;
 }
 
 export interface PodcastViewItem {
@@ -71,7 +73,14 @@ export function classEpisodeView(
   podcast: PodcastSummary,
   episode: PodcastEpisode,
 ): PodcastViewItem {
-  const transcript = parseClassTranscript(episode.script);
+  const transcript = episode.transcript?.length
+    ? episode.transcript.map((turn) => ({
+        speaker: speakerLabel(turn.speaker),
+        text: turn.text,
+        startSeconds: turn.startSeconds,
+        endSeconds: turn.endSeconds,
+      }))
+    : parseClassTranscript(episode.script);
   return {
     source: 'class',
     id: episode.id,
@@ -108,6 +117,8 @@ export function personalPodcastView(podcast: PersonalPodcast): PodcastViewItem {
     transcript: (podcast.turns ?? []).map((turn) => ({
       speaker: speakerLabel(turn.speaker),
       text: turn.text,
+      startSeconds: turn.startSeconds,
+      endSeconds: turn.endSeconds,
     })),
     materials: podcast.selectedMaterials.map((material) => material.documentName),
     progressPercent: podcast.progressPercent,
