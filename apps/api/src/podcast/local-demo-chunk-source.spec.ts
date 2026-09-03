@@ -40,6 +40,23 @@ describe('LocalDemoChunkSource', () => {
     });
   });
 
+  it('ships the Regularization fixture used by the standalone Simulator', async () => {
+    process.env.PODCAST_DEMO_CHUNKS_DIR = path.resolve(__dirname, '../../demo-chunks');
+    const source = new LocalDemoChunkSource();
+
+    const materials = await source.listMaterials('simulator-class', 'simulated-kiwi-app-token');
+    const fixture = materials.find(
+      (material) => material.id === '49d054f2-2a9c-44f1-9a9f-43d67d77a01a',
+    );
+
+    expect(fixture).toMatchObject({
+      documentName: '14_regularization_2.pdf',
+      materialType: 'class materials',
+      chunkCount: 30,
+      pageCount: 18,
+    });
+  });
+
   it('throws for missing demo chunk files', async () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'kiwi-podcast-chunks-'));
     process.env.PODCAST_DEMO_CHUNKS_DIR = dir;

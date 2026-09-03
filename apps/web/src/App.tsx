@@ -421,6 +421,7 @@ export function App() {
         <PodcastCreator
           classId={bridge.context.classId}
           token={bridge.token.accessToken}
+          mode={bridge.mode}
           onCancel={() => setMainView('home')}
           onComplete={() => {
             setMainView('home');

@@ -1,0 +1,67 @@
+{
+  "documentId": "49d054f2-2a9c-44f1-9a9f-43d67d77a01a",
+  "documentName": "14_regularization_2.pdf",
+  "materialId": "b193a9e6-ac5d-41ce-ae85-f0352c22ff1a",
+  "materialType": "class materials",
+  "chunkCount": 30,
+  "pageCount": 18,
+  "preview": "Lasso uses L1 regularization to shrink coefficients and set small coefficients exactly to zero, producing a sparse solution.",
+  "title": "Lasso Regularization: Sparsity and Soft Thresholding",
+  "summary": "A playable demo generated from the included Lecture 14 chunks, covering Lasso, subgradients, coordinate descent, and how the regularization parameter controls sparsity.",
+  "transcript": [
+    {
+      "speaker": "HOST_A",
+      "text": "Welcome to our class podcast on Lasso regularization. This episode is grounded in Lecture Fourteen's regularization slides. We will connect the L one penalty, sparse solutions, subgradients, coordinate descent, and soft thresholding.",
+      "startSeconds": 0,
+      "endSeconds": 14.898
+    },
+    {
+      "speaker": "HOST_B",
+      "text": "Let us begin with the core idea. Lasso adds the sum of the absolute values of the model's coefficients to the prediction loss, scaled by a tuning parameter called lambda. That penalty discourages large coefficients and can push some of them all the way to zero.",
+      "startSeconds": 14.898,
+      "endSeconds": 29.912
+    },
+    {
+      "speaker": "HOST_A",
+      "text": "That exact zero is what makes Lasso useful for variable selection. Geometrically, the L one constraint has sharp corners. A loss contour can first touch the constraint at a corner, where one coordinate is zero. Ridge uses an L two constraint instead and usually shrinks coefficients without making the solution sparse.",
+      "startSeconds": 29.912,
+      "endSeconds": 48.277
+    },
+    {
+      "speaker": "HOST_B",
+      "text": "There is a mathematical wrinkle. The absolute value function is not differentiable at zero, so the ordinary gradient is not enough. We use a subgradient: a slope that supports a convex function from below. At a minimum, zero must belong to the set of valid subgradients.",
+      "startSeconds": 48.277,
+      "endSeconds": 65.007
+    },
+    {
+      "speaker": "HOST_A",
+      "text": "To solve the Lasso objective, the lecture introduces coordinate descent. Hold every coefficient except one fixed, compute the prediction residual that excludes that coordinate, and optimize only the remaining one-dimensional problem. Then move to the next coordinate and repeat until convergence.",
+      "startSeconds": 65.007,
+      "endSeconds": 82.028
+    },
+    {
+      "speaker": "HOST_B",
+      "text": "The update is soft thresholding. A coordinate gets reduced toward zero by lambda. If its signal is no larger than the threshold, the new coefficient is exactly zero. If it is larger, keep its sign and subtract the threshold before dividing by the coordinate's scale.",
+      "startSeconds": 82.028,
+      "endSeconds": 97.792
+    },
+    {
+      "speaker": "HOST_A",
+      "text": "Compare that with Ridge. Under an orthogonal input matrix, Ridge proportionally shrinks every coefficient. Lasso translates coefficient magnitudes by a constant amount and truncates at zero. As lambda increases, more Lasso coefficients disappear, while Ridge paths tend to approach zero smoothly.",
+      "startSeconds": 97.792,
+      "endSeconds": 115.323
+    },
+    {
+      "speaker": "HOST_B",
+      "text": "Lambda therefore controls the tradeoff. A small value stays closer to the unregularized fit. A larger value creates a simpler, sparser model, but too much regularization can remove useful signal. The slides recommend separating training, validation, and test data, then choosing lambda with validation performance.",
+      "startSeconds": 115.323,
+      "endSeconds": 135.225
+    },
+    {
+      "speaker": "HOST_A",
+      "text": "Here is the takeaway. Lasso combines prediction loss with an L one penalty. Subgradients handle the corner at zero, coordinate descent makes optimization manageable, and soft thresholding explains the sparse result. Use validation data to select lambda, and remember that sparsity is a modeling choice, not automatically a better model.",
+      "startSeconds": 135.225,
+      "endSeconds": 155.294
+    }
+  ]
+}

@@ -359,10 +359,12 @@ When Nest starts, its storage service idempotently creates the private
 `kiwi-podcasts` bucket. Audio is streamed through Nest; the browser never
 receives MinIO credentials.
 
-Chunk exports remain local and ignored at `apps/api/demo-chunks/*.json`, but
-they are used only by standalone Simulator mode. The exact simulator token
-selects that fixture source; all real Kiwi app tokens use the live REST
-endpoint.
+Chunk exports remain local and ignored at `apps/api/demo-chunks/*.json`, except
+for the committed Regularization fixture used by standalone Simulator mode.
+The Simulator class library bundles a matching static audio episode, and the
+personal-podcast material picker exposes the same fixture without contacting
+Kiwi. The exact simulator token selects the fixture source for generation; all
+real Kiwi app tokens use the live REST endpoint.
 
 ## Checks
 

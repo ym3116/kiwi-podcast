@@ -1,0 +1,189 @@
+{
+  "classId": "1ef1daa0-6f00-4c52-b13f-fa85b65b3e31",
+  "documentId": "49d054f2-2a9c-44f1-9a9f-43d67d77a01a",
+  "documentName": "14_regularization_2.pdf",
+  "materialId": "b193a9e6-ac5d-41ce-ae85-f0352c22ff1a",
+  "materialType": "class materials",
+  "chunks": [
+    {
+      "text": "Regularization Cont’ed (Lasso)\n\nCS 360 Lecture 14",
+      "pageNumber": "1",
+      "type": "CompositeElement",
+      "index": 0
+    },
+    {
+      "text": "Lasso Regression",
+      "pageNumber": "2",
+      "type": "CompositeElement",
+      "index": 1
+    },
+    {
+      "text": "Lasso Regression (L1 Regularization) Model: Y = wy + wTX\n\nLasso Regression\n\nLoss function: };i-, (y; — Z?zl X; jWj — Wp)?\n\nRegularization: Z?zl |lwj| <R\n\nOr Equivalently min Y1, (y; — Z?=1 Xi jWj — wp)? + /12;1:1 |wj]",
+      "pageNumber": "3",
+      "type": "CompositeElement",
+      "index": 2
+    },
+    {
+      "text": "P-norm for Regularzation\n\nd 1/p Iwll, = <Z ijl”> Jj=1",
+      "pageNumber": "4",
+      "type": "CompositeElement",
+      "index": 3
+    },
+    {
+      "text": "Note on regularization\n\nsparse solution non-sparse solution\n\nThe lasso regularization performs variable selection",
+      "pageNumber": "5",
+      "type": "CompositeElement",
+      "index": 4
+    },
+    {
+      "text": "Lasso: How to Solve e Objective:\n\nn min ) (= wTx)? + Awll -\n\ne Gradient of the L1 regularization:\n\n1. ifw; >0\n\nowll _ ) 4 f W <0 - ]\n\noW, 2 ifw;=0\n\ne Lasso objective is not differentialble.",
+      "pageNumber": "6",
+      "type": "CompositeElement",
+      "index": 5
+    },
+    {
+      "text": "Subgradient\n\ne For a convex function f (not necessarily smooth), a vector g is a subgradient of f at x, if for all z we have f(z) = f(x) + g7 (z — x) e Subgradient is not unique at a point x.\n\nflz) + gf(z — 1)\n\n. .\n\nf(@2) + 95 (2 — 22)\n\nf($2) + gg(z — )\n\n. s e (S ---- (L s s\n\ng 'y ---- . .",
+      "pageNumber": "7",
+      "type": "CompositeElement",
+      "index": 6
+    },
+    {
+      "text": "Subgradient\n\ne Intuitively: Any line that touches the function curve at f(x) and does not pass through the function curve. e The subgradient is not unique. We call the set of all subgradients the subdifferential, i.e., the set of all lines that satisfy the condition: 0r(x) ={g:f(2) =2 f(x) + g\" (z — x)} e If f is differentiable at x, then d;(x) = {Vf(x)}\n\ne A convex function (not necessarily differentiable) is minimized at x if the zero-\n\nvector is a subgradient at x: 0€dr(x\") iff x*€argmin,f(x) e Goal for Lasso: find w* such that 0 € 9, (w*) where L is the lasso objective.",
+      "pageNumber": "8",
+      "type": "CompositeElement",
+      "index": 7
+    },
+    {
+      "text": "Lasso: Coordinate Descent\n\nGoal for Lasso: find w* such that 0 € 9, (w*) where L is the lasso objective. Still hard! Easier: optimize one coordinate (feature dimension) at a time. Suppose we fix all but dimenion j of w, it is easier to minimize such a “partial” Lasso objective if we just changing w;:\n\n2 n‘}/]nz <yl — (Z erxl-'jr) = iji,j) + (A Z |W]’|> + A|W]| J ] j'#j \\_ J Y\n\nn‘},mZ(riJ —wj%i;) +6/‘%M:\\> + A|wj| g v Ji#¢\n\nResidual of the prediction, Except for dimension j\n\nNot dependent on w; , Irrelevant to optimization",
+      "pageNumber": "9",
+      "type": "CompositeElement",
+      "index": 8
+    },
+    {
+      "text": "Lasso: Coordinate Descent\n\nFor a coordinate (feature dimension) j:\n\nmlnL i(w) = Z(r” jxi,j)z + Alw;]\n\ne Recallr;; =y, — (T jrej WXy, jr), ie., the residual except for dimension j o Letqg; = 221 - Note a; = 0. o Letc =2 Zirwxw\n\no.w) ={[-¢c—4—c+2] ifw;=0\n\no If/1 = O, the derivative L} (W]) = Zi Z(Ti'j — iji'j)(—xi'j) = sz Zi xlz'] -2 Zi ri,j xi’j",
+      "pageNumber": "10",
+      "type": "CompositeElement",
+      "index": 9
+    },
+    {
+      "text": "Lasso: Coordinate Descent - Soft Thresholding\n\no(wp) =<[-c—4—¢+2] ifw;=0\n\ne We need to find w; such that 0 € 9, (w;): e For the first case: a; G<—-i1- wi<0 -agw —¢—-1=0 - OeaL(wj*)\n\nJ\n\ne The third case is similar, just with a different sign.",
+      "pageNumber": "11",
+      "type": "CompositeElement",
+      "index": 10
+    },
+    {
+      "text": "Lasso: Coordinate Descent - Soft Thresholding\n\naw; —cj — A ifwj <0 0L (wj) = {[—cj —A—c+2] ifwj=0 aw; —¢j+ 4 if wj>0 e We need to find w; such that 0 € 9, (w;): e For the second case:\n\n0€[—¢—A—¢+ 4]\n\nwi =0,¢ € [-4,] > 0€ad,(w)",
+      "pageNumber": "12",
+      "type": "CompositeElement",
+      "index": 11
+    },
+    {
+      "text": "Lasso: Coordinate Descent - Soft Thresholding\n\no(wp) =<[-c—4—¢+2] ifw;=0\n\ne We need to find w; such that 0 € 9, (w;):\n\no if ¢ w; =10 if || <2 C.\n\n4 > o if Cj\n\n= sign(cj) max(O, |cj| — /1) /a;",
+      "pageNumber": "13",
+      "type": "CompositeElement",
+      "index": 12
+    },
+    {
+      "text": "Lasso: Coordinate Descent - Soft Thresholding\n\n9 e <2 aj J w; =10 if || <2 C]—A . % if ;>4\n\ne Note, for the first and the third case, it’s essentially the same as setting the derivative to zero and solving for the optimal solution.\n\ne When |¢;| small, we retreat to the middle case, where the resulting |w;| will also be small if we use the first/third equation. By soft thresholding, we directly set such a small value to 0. This gives us sparsity in the solution.",
+      "pageNumber": "14",
+      "type": "CompositeElement",
+      "index": 13
+    },
+    {
+      "text": "Lasso: Coordinate Descent - Overview\n\nR t until . This is the naive implementation of epeat until convergence: coordinate descent. You can use this\n\ne Forje{l,2-,d}: for the first few sub-problems of hw3.2 o Compute. 7;; = y; — (Zj’#:j erxi,j'), a; = ZZL-x?,,-, G = 275 Ti,jXi,j\n\nC]'+ﬂ.\n\n& o Update w; = {0 if |¢| <4 More efficient implementation (HW3 hint): 92 4 Think about which part of the computation ifcg>42 . ) 4 is most expensive?\n\nCan you change it so that the computation will be to gradually update the target value intead of computing it from scratch for every iteration?",
+      "pageNumber": "15",
+      "type": "CompositeElement",
+      "index": 14
+    },
+    {
+      "text": "Regularization Effect on Parameters\n\nRidge ||w||2 Lasso [|w||x 0.6 0.6 0.2 0.2 01 0.1 0 0.0 10 10 10 107 10 10 10 10° 10? 10°",
+      "pageNumber": "16",
+      "type": "CompositeElement",
+      "index": 15
+    },
+    {
+      "text": "How Ridge and Lasso Regression Changes Parameters\n\nWhen the input matrix X is orthogonal, o Ridge regression does a proportional shrinkage. o Lasso translates each coefficient by a constant factor A, truncating at zero.\n\no Best-subset selection drops all variables with coefficients smaller than the M™ largest\n\n. Best Subset Ridge Lasso Estimator Formula ) Feature Selection | w; - I(W; > Wy ) 7 L [ . , Ridge w;/(1+2) ) 700 .7 oo",
+      "pageNumber": "17",
+      "type": "CompositeElement",
+      "index": 16
+    },
+    {
+      "text": "How to choose tuning parameter A\n\nDATASET\n\nTRAIN VALIDATION TEST",
+      "pageNumber": "18",
+      "type": "CompositeElement",
+      "index": 17
+    },
+    {
+      "text": "This image depicts a simple lasso made of rope with a loop at one end. The rope is coiled in a way that suggests it is ready to be thrown. The background is plain white.",
+      "pageNumber": "2",
+      "type": "Image",
+      "index": 18
+    },
+    {
+      "text": "The image shows four plots with different shapes, each labeled with a different value of \"p\" (0.5, 1, 2, and 4). \n\n- For \\( p=0.5 \\), the shape is a diamond with concave sides.\n- For \\( p=1 \\), the shape is a diamond with straight sides.\n- For \\( p=2 \\), the shape is a circle.\n- For \\( p=4 \\), the shape is a square with rounded corners.\n\nEach plot has axes labeled \\( w_0 \\) and \\( w_1 \\). These shapes represent Lp norm unit circles for different values of p.",
+      "pageNumber": "4",
+      "type": "Image",
+      "index": 19
+    },
+    {
+      "text": "This image shows the mathematical formula for the Lp norm of a vector \\( w \\). It is represented as:\n\n\\[\n\\|w\\|_p = \\left( \\sum_{j=1}^{d} |w_j|^p \\right)^{1/p}\n\\]\n\nHere, \\( d \\) is the dimension of the vector, \\(|w_j|\\) is the absolute value of the j-th component of \\( w \\), and \\( p \\) is a real number greater than or equal to 1.",
+      "pageNumber": "4",
+      "type": "Image",
+      "index": 20
+    },
+    {
+      "text": "The image shows a graphical representation related to optimization problems, specifically illustrating L1 regularization typically used in LASSO regression. The plot includes:\n\n1. A set of concentric ellipses representing contour lines of a loss function \\( L(w) \\).\n2. A diamond shape indicating the constraint boundary associated with the L1 norm (\\( \\|w\\|_1 \\)).\n3. The axes are labeled \\( w_1 \\) and \\( w_2 \\).\n4. A highlighted point on the diamond's boundary suggests a sparse solution, meaning many of the weights are zero.\n\nThis diagram helps visualize how L1 regularization promotes sparsity in solutions.",
+      "pageNumber": "5",
+      "type": "Image",
+      "index": 21
+    },
+    {
+      "text": "The image depicts a contour plot representing an optimization problem. The plot includes ellipses centered around the origin, signifying levels of a loss function \\(L(w)\\). The axes are labeled \\(w_1\\) and \\(w_2\\), representing two parameters. A circle with radius \\(\\|w\\|_2\\) is shown intersecting the ellipses, with a specific point marked at the intersection, labeled as a \"non-sparse solution.\" This illustrates a solution found using an \\(\\ell_2\\) regularization (ridge regularization), indicating non-sparsity in parameter selection.",
+      "pageNumber": "5",
+      "type": "Image",
+      "index": 22
+    },
+    {
+      "text": "This image depicts a mathematical expression for the derivative of the L1 norm of a vector \\(w\\) with respect to the component \\(w_j\\). The derivative is defined piecewise as follows:\n\n- It is \\(1\\) if \\(w_j > 0\\).\n- It is \\(-1\\) if \\(w_j < 0\\).\n- It is undefined or ambiguous (denoted by \"?\") if \\(w_j = 0\\).",
+      "pageNumber": "6",
+      "type": "Image",
+      "index": 23
+    },
+    {
+      "text": "The image depicts a graph of a function \\( f(z) \\) with its tangent lines at points \\( x_1 \\) and \\( x_2 \\). The solid black curve represents the function \\( f(z) \\). Tangent lines are shown as dotted lines: \n\n- At \\( x_1 \\), there is one tangent line labeled \\( f(x_1) + g_1^T(z - x_1) \\).\n- At \\( x_2 \\), there are two tangent lines labeled \\( f(x_2) + g_2^T(z - x_2) \\) and \\( f(x_2) + g_3^T(z - x_2) \\). \n\nThe tangent lines represent linear approximations of the function at those points. The points \\( x_1 \\) and \\( x_2 \\) are marked on the x-axis.",
+      "pageNumber": "7",
+      "type": "Image",
+      "index": 24
+    },
+    {
+      "text": "The image shows a mathematical expression for \\( w_j \\) defined as a piecewise function. The function has three cases:\n\n1. \\( \\frac{c_j + \\lambda}{a_j} \\) if \\( c_j < -\\lambda \\)\n2. \\( 0 \\) if \\( |c_j| \\leq \\lambda \\)\n3. \\( \\frac{c_j - \\lambda}{a_j} \\) if \\( c_j > \\lambda \\)\n\nHere, \\( c_j \\), \\( \\lambda \\), and \\( a_j \\) are variables or parameters in the expression.",
+      "pageNumber": "14",
+      "type": "Image",
+      "index": 25
+    },
+    {
+      "text": "The image shows two plots comparing Ridge and Lasso regression with respect to different values of the regularization parameter \\( \\lambda \\). \n\n- The left plot represents Ridge regression (\\(||\\mathbf{w}||_2\\)).\n- The right plot represents Lasso regression (\\(||\\mathbf{w}||_1\\)).\n\nBoth plots show the weights \\( w_j \\) on the y-axis against the logarithmic scale of \\( \\lambda \\) on the x-axis. Each line represents a different feature weight. \n\nIn the Ridge plot, weights decrease smoothly as \\( \\lambda \\) increases, while in the Lasso plot, many weights drop to zero, demonstrating Lasso's feature selection characteristic.",
+      "pageNumber": "16",
+      "type": "Image",
+      "index": 26
+    },
+    {
+      "text": "The image illustrates the paths of coefficient estimates for different regression techniques: Best Subset, Ridge, and Lasso, each in a separate panel. \n\n- **Best Subset**: The path of coefficient estimates (shown in red dashed lines) has sharp changes, allowing for coefficients to be exactly zero, indicating possible feature selection.\n\n- **Ridge**: The path is smooth, reflecting that Ridge regression shrinks coefficients but doesn't set them to zero, hence no feature selection.\n\n- **Lasso**: It features both shrinkage and sparsity, where coefficients can be exactly zero due to the $\\lambda$ constraint, allowing for feature selection.\n\nAxes are labeled (0,0) at the origin for each graph.",
+      "pageNumber": "17",
+      "type": "Image",
+      "index": 27
+    },
+    {
+      "text": "The image consists of two sections. The left section is a table comparing three estimators: Feature Selection, Ridge, and Lasso. Each estimator has a corresponding formula: \n\n1. **Feature Selection**: \\( \\hat{w}_j \\cdot I(\\hat{w}_j > \\hat{w}_{(M)}) \\)\n2. **Ridge**: \\( \\hat{w}_j/(1+\\lambda) \\)\n3. **Lasso**: \\( \\text{sign}(\\hat{w}_j)(|\\hat{w}_j| - \\lambda)_+ \\)\n\nThe right section displays three graphs labeled \"Best Subset,\" \"Ridge,\" and \"Lasso,\" showing how each method affects weights. The graphs feature red dashed lines against a coordinate axis grid, illustrating different shrinkage or selection effects of each estimator starting from the origin (0,0).",
+      "pageNumber": "17",
+      "type": "Image",
+      "index": 28
+    },
+    {
+      "text": "The image consists of four colored rectangles. The first two are red, the third is yellow, and the fourth is green. Each rectangle is outlined with a thin black border.",
+      "pageNumber": "18",
+      "type": "Image",
+      "index": 29
+    }
+  ]
+}

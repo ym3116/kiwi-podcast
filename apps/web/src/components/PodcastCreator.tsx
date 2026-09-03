@@ -13,11 +13,13 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { createMyPodcast, fetchCreatorMaterials, fetchMyPodcast, retryMyPodcast } from '../api/podcastApi';
+import { simulatorMaterials } from '../bridge/simulator';
 import { DemoMaterial, PersonalPodcast, PodcastDifficulty } from '../types/podcast';
 
 interface Props {
   classId: string;
   token: string;
+  mode: 'live' | 'simulator';
   onCancel: () => void;
   onComplete: () => void;
   onPlayReady: (podcast: PersonalPodcast) => void;
@@ -31,7 +33,7 @@ const examples = [
 ];
 const steps = ['Idea', 'Materials', 'Length', 'Difficulty', 'Generate'];
 
-export function PodcastCreator({ classId, token, onCancel, onComplete, onPlayReady, onContextChange }: Props) {
+export function PodcastCreator({ classId, token, mode, onCancel, onComplete, onPlayReady, onContextChange }: Props) {
   const [step, setStep] = useState(0);
   const [prompt, setPrompt] = useState('');
   const [materials, setMaterials] = useState<DemoMaterial[]>([]);
@@ -46,11 +48,18 @@ export function PodcastCreator({ classId, token, onCancel, onComplete, onPlayRea
   const [displayProgress, setDisplayProgress] = useState(5);
 
   useEffect(() => {
+    if (mode === 'simulator') {
+      setMaterials(simulatorMaterials);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
     fetchCreatorMaterials(classId, token)
       .then(({ materials }) => setMaterials(materials))
       .catch((error) => setError(error instanceof Error ? error.message : 'Unable to load materials'))
       .finally(() => setLoading(false));
-  }, [classId, token]);
+  }, [classId, mode, token]);
 
   const searchable = prompt.toLowerCase().split(/\W+/).filter((word) => word.length > 3);
   const recommendedIds = useMemo(() => {
@@ -163,7 +172,7 @@ export function PodcastCreator({ classId, token, onCancel, onComplete, onPlayRea
         <section className="question-card">
           {loading ? <Loader2 className="spin" /> : null}
           {step === 0 ? <IdeaStep prompt={prompt} setPrompt={setPrompt} /> : null}
-          {step === 1 ? <MaterialsStep materials={materials} selected={selected} setSelected={setSelected} recommended={recommendedIds} /> : null}
+          {step === 1 ? <MaterialsStep materials={materials} selected={selected} setSelected={setSelected} recommended={recommendedIds} mode={mode} /> : null}
           {step === 2 ? <ChoiceStep title="How long should it be?" subtitle="Choose the depth that fits your available time." options={[['5', 'Quick recap', 'Fast essentials'], ['10', 'Focused review', 'Balanced coverage'], ['15', 'Deep dive', 'Detailed connections']]} value={String(duration)} recommended={String(recommendedDuration)} onChange={(value) => { setDuration(Number(value) as 5 | 10 | 15); setDurationTouched(true); }} icon="clock" /> : null}
           {step === 3 ? <ChoiceStep title="Choose the difficulty" subtitle="We’ll adjust vocabulary, examples, and depth." options={[['beginner', 'Beginner', 'Fundamentals and intuition'], ['intermediate', 'Intermediate', 'Connections and application'], ['advanced', 'Advanced', 'Technical depth and edge cases']]} value={difficulty} recommended={recommendedDifficulty} onChange={(value) => { setDifficulty(value as PodcastDifficulty); setDifficultyTouched(true); }} icon="book" /> : null}
           {step === 4 ? <Review prompt={prompt} materials={materials.filter((m) => selected.includes(m.id))} duration={duration} difficulty={difficulty} /> : null}
@@ -183,9 +192,12 @@ function IdeaStep({ prompt, setPrompt }: { prompt: string; setPrompt: (value: st
   return <><div className="question-icon"><Sparkles /></div><div className="eyebrow">Step 1 · Idea</div><h1>What would you like to learn?</h1><p>Describe the focus, goal, or style you want for your podcast.</p><textarea className="prompt-input" value={prompt} maxLength={1000} onChange={(event) => setPrompt(event.target.value)} placeholder="For example: Help me understand regularization before the exam…" /><div className="prompt-meta"><span>{prompt.length}/1000</span><span>{prompt.length > 0 && prompt.trim().length < 10 ? 'Add a little more detail' : ''}</span></div><div className="suggestion-chips">{examples.map((example) => <button type="button" key={example} onClick={() => setPrompt(example)}>{example}</button>)}</div></>;
 }
 
-function MaterialsStep({ materials, selected, setSelected, recommended }: { materials: DemoMaterial[]; selected: string[]; setSelected: (ids: string[]) => void; recommended: string[] }) {
+function MaterialsStep({ materials, selected, setSelected, recommended, mode }: { materials: DemoMaterial[]; selected: string[]; setSelected: (ids: string[]) => void; recommended: string[]; mode: 'live' | 'simulator' }) {
   const toggle = (id: string) => setSelected(selected.includes(id) ? selected.filter((item) => item !== id) : selected.length < 5 ? [...selected, id] : selected);
-  return <><div className="question-icon"><FileText /></div><div className="eyebrow">Step 2 · Materials</div><h1>Choose your source materials</h1><p>Select up to five live Kiwi class documents. The podcast will fetch their latest parsed text when generation starts.</p><div className="material-tools"><button type="button" onClick={() => setSelected(recommended)}>Select recommended</button><button type="button" onClick={() => setSelected(materials.slice(0, 5).map((m) => m.id))}>Select all</button><button type="button" onClick={() => setSelected([])}>Clear</button></div><div className="material-grid">{materials.map((material) => <button type="button" className={selected.includes(material.id) ? 'material-card selected' : 'material-card'} key={material.id} onClick={() => toggle(material.id)}><span className="material-check">{selected.includes(material.id) ? <Check size={15} /> : null}</span>{recommended.includes(material.id) ? <span className="recommendation-pill">Recommended</span> : null}<FileText size={22} /><strong>{material.documentName}</strong><small>{material.pageCount ? `${material.pageCount} pages · ` : ''}{material.chunkCount} chunks</small><p>{material.preview || material.materialType}</p></button>)}</div>{materials.length === 0 ? <div className="empty-state"><FileText /><p>No parsed Kiwi documents are currently available for this class.</p></div> : null}</>;
+  const explanation = mode === 'simulator'
+    ? 'Choose the included demo class material. Its chunks also ground the playable class episode.'
+    : 'Select up to five live Kiwi class documents. The podcast will fetch their latest parsed text when generation starts.';
+  return <><div className="question-icon"><FileText /></div><div className="eyebrow">Step 2 · Materials</div><h1>Choose your source materials</h1><p>{explanation}</p><div className="material-tools"><button type="button" onClick={() => setSelected(recommended)}>Select recommended</button><button type="button" onClick={() => setSelected(materials.slice(0, 5).map((m) => m.id))}>Select all</button><button type="button" onClick={() => setSelected([])}>Clear</button></div><div className="material-grid">{materials.map((material) => <button type="button" className={selected.includes(material.id) ? 'material-card selected' : 'material-card'} key={material.id} onClick={() => toggle(material.id)}><span className="material-check">{selected.includes(material.id) ? <Check size={15} /> : null}</span>{recommended.includes(material.id) ? <span className="recommendation-pill">Recommended</span> : null}<FileText size={22} /><strong>{material.documentName}</strong><small>{material.pageCount ? `${material.pageCount} pages · ` : ''}{material.chunkCount} chunks</small><p>{material.preview || material.materialType}</p></button>)}</div>{materials.length === 0 ? <div className="empty-state"><FileText /><p>No parsed Kiwi documents are currently available for this class.</p></div> : null}</>;
 }
 
 function ChoiceStep({ title, subtitle, options, value, recommended, onChange, icon }: { title: string; subtitle: string; options: string[][]; value: string; recommended: string; onChange: (value: string) => void; icon: 'clock' | 'book' }) {

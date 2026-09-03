@@ -9,4 +9,5 @@ deploy/*.env
 .DS_Store
 apps/api/demo-chunks/*.json
 apps/api/demo-chunks/*.local.json
+!apps/api/demo-chunks/49d054f2-2a9c-44f1-9a9f-43d67d77a01a.json
 !apps/api/demo-chunks/.gitkeep

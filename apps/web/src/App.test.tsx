@@ -70,28 +70,33 @@ describe('App', () => {
     render(<App />);
 
     expect(await screen.findByText('Regularization - Podcast')).toBeInTheDocument();
-    expect(screen.getByText('Lecture 14 - Regularization 2')).toBeInTheDocument();
+    expect(screen.getByText('Lasso Regularization: Sparsity and Soft Thresholding')).toBeInTheDocument();
+    expect(screen.getByText('1 episode')).toBeInTheDocument();
   });
 
   it('opens an episode detail and toggles play state', async () => {
     const user = userEvent.setup();
-    render(<App />);
+    const { container } = render(<App />);
 
-    await screen.findByText('Lecture 14 - Regularization 2');
-    await user.click(screen.getByText('Lecture 14 - Regularization 2'));
+    await screen.findByText('Lasso Regularization: Sparsity and Soft Thresholding');
+    await user.click(screen.getByText('Lasso Regularization: Sparsity and Soft Thresholding'));
 
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Lecture 14 - Regularization 2' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Lasso Regularization: Sparsity and Soft Thresholding' })).toBeInTheDocument());
+    expect(screen.getByText(/The update is soft thresholding/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Play' }));
     expect(screen.getAllByRole('button', { name: 'Pause' }).length).toBeGreaterThan(0);
+    await waitFor(() => expect(container.querySelector('audio')?.src).toContain(
+      '/demo/regularization-lasso.mp3',
+    ));
   });
 
   it('uses audio metadata for transport controls without reopening episode detail', async () => {
     const user = userEvent.setup();
     const { container } = render(<App />);
 
-    await screen.findByText('Lecture 14 - Regularization 2');
-    await user.click(screen.getByText('Lecture 14 - Regularization 2'));
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Lecture 14 - Regularization 2' })).toBeInTheDocument());
+    await screen.findByText('Lasso Regularization: Sparsity and Soft Thresholding');
+    await user.click(screen.getByText('Lasso Regularization: Sparsity and Soft Thresholding'));
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Lasso Regularization: Sparsity and Soft Thresholding' })).toBeInTheDocument());
     await user.click(screen.getByRole('button', { name: 'Play' }));
 
     await user.click(screen.getByRole('button', { name: 'Back to Class Podcast' }));
@@ -121,10 +126,10 @@ describe('App', () => {
     const user = userEvent.setup();
     const { container } = render(<App />);
 
-    await screen.findByText('Lecture 14 - Regularization 2');
-    await user.click(screen.getByText('Lecture 14 - Regularization 2'));
+    await screen.findByText('Lasso Regularization: Sparsity and Soft Thresholding');
+    await user.click(screen.getByText('Lasso Regularization: Sparsity and Soft Thresholding'));
     await waitFor(() =>
-      expect(screen.getByRole('heading', { name: 'Lecture 14 - Regularization 2' })).toBeInTheDocument(),
+      expect(screen.getByRole('heading', { name: 'Lasso Regularization: Sparsity and Soft Thresholding' })).toBeInTheDocument(),
     );
     await user.click(screen.getByRole('button', { name: 'Play' }));
 
@@ -173,12 +178,8 @@ describe('App', () => {
     expect(screen.getByLabelText('Now playing')).toHaveTextContent('Regularization review');
   });
 
-  it('describes creator materials as live Kiwi documents', async () => {
+  it('always exposes the bundled demo chunks as simulator creator material', async () => {
     const user = userEvent.setup();
-    vi.stubGlobal('fetch', vi.fn(async () => ({
-      ok: true,
-      json: async () => ({ materials: [] }),
-    })));
     render(<App />);
 
     await screen.findByText('Regularization - Podcast');
@@ -189,8 +190,11 @@ describe('App', () => {
     );
     await user.click(screen.getByRole('button', { name: /Continue/i }));
 
-    expect(await screen.findByText(/live Kiwi class documents/i)).toBeInTheDocument();
-    expect(screen.getByText('No parsed Kiwi documents are currently available for this class.')).toBeInTheDocument();
+    expect(await screen.findByText(/included demo class material/i)).toBeInTheDocument();
+    expect(screen.getByText('14_regularization_2.pdf')).toBeInTheDocument();
+    expect(screen.getByText('18 pages · 30 chunks')).toBeInTheDocument();
+    expect(screen.queryByText('No parsed Kiwi documents are currently available for this class.')).not.toBeInTheDocument();
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it('fetches live audio with the app token and revokes its temporary Blob URL', async () => {
