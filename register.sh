@@ -34,6 +34,15 @@ CLASS_ID="${CLASS_ID:-}"                         # optional: enable the app in t
 
 SCOPES='["user:profile:read","class:info:read","class:enrollments:read","class:materials:chunks:read","podcast:manage"]'
 
+# This is the app-facing description stored in Kiwi's registry. Keep navigation
+# names and role boundaries aligned with the actual UI: students never receive
+# the protected Manage surface, and the global panel is restricted to admins.
+APP_DESCRIPTION='Kiwi Podcast is a class-based learning app that turns Kiwi class documents into audio podcasts. Open a class in Kiwi and select the Podcast tab.'
+APP_DESCRIPTION+=' Students see only two in-app tabs: Class Podcast and My Podcasts; they do not see the Manage tab. Class Podcast lets students listen to episodes published by professors, instructors, or authorized administrators, with each episode corresponding to one lecture or class document. My Podcasts lets a student create a private, personalized podcast: open My Podcasts, select Create podcast, enter a learning goal or prompt, select up to five available class documents, choose a length of 5, 10, or 15 minutes, and choose beginner, intermediate, or advanced difficulty. Generated personal podcasts appear under My Podcasts.'
+APP_DESCRIPTION+=' Authorized professors, instructors, and administrators can use all learner features and also see the Manage tab. In Manage, they can create and maintain one class podcast per class document, generate or edit its script, configure shared class voice defaults or per-podcast host and speaker voice overrides, render and listen to a preview, and explicitly publish the finished version. Students can listen only to versions that have been published.'
+APP_DESCRIPTION+=' System administrators also have a Podcast Admin panel under Kiwi App Admin Panels. Global Defaults controls the system-wide host and speaker voices inherited by classes without class-level or podcast-level overrides. All Classes shows Podcast availability, effective voice sources, published episode counts, and recent Podcast activity for classes visible to the administrator; it is an overview rather than unrestricted access to every podcast.'
+APP_DESCRIPTION_JSON=$(printf '%s' "$APP_DESCRIPTION" | python3 -c 'import json, sys; print(json.dumps(sys.stdin.read()))')
+
 COOKIE_ARGS=()
 if [ -n "$KIWI_COOKIE" ]; then
   COOKIE_ARGS=(-H "Cookie: $KIWI_COOKIE")
@@ -59,7 +68,7 @@ else
       \"registrationSecret\": \"$SECRET\",
       \"baseUrl\": \"$APP_URL\",
       \"status\": \"approved\",
-      \"description\": \"Kiwi Podcast external app\",
+      \"description\": \"Approved external app for class and personalized podcast learning workflows\",
       \"maxScopes\": $SCOPES
     }" | pp || warn "whitelist create call failed (it may already exist — continuing with update)"
 
@@ -72,7 +81,7 @@ else
       \"baseUrl\": \"$APP_URL\",
       \"registrationSecret\": \"$SECRET\",
       \"status\": \"approved\",
-      \"description\": \"Kiwi Podcast external app\",
+      \"description\": \"Approved external app for class and personalized podcast learning workflows\",
       \"maxScopes\": $SCOPES
     }" | pp || warn "whitelist update failed"
 fi
@@ -84,15 +93,15 @@ if ! REG_RESPONSE=$(curl -sS --fail-with-body -X POST "$KIWI/api/kiwi-apps/regis
   -d "{
     \"slug\": \"$SLUG\",
     \"registrationSecret\": \"$SECRET\",
-    \"name\": \"kiwi-podcast\",
-    \"description\": \"External Kiwi App for podcast learning workflows\",
+    \"name\": \"Kiwi Podcast\",
+    \"description\": $APP_DESCRIPTION_JSON,
     \"baseUrl\": \"$APP_URL\",
     \"appType\": \"frontend_only\",
     \"capabilities\": [\"ai\", \"mcp\"],
     \"uis\": [
       {
         \"uiSlug\": \"student\",
-        \"uiName\": \"kiwi-podcast\",
+        \"uiName\": \"Kiwi Podcast\",
         \"uiUrl\": \"$APP_URL\",
         \"placement\": \"class-tab\",
         \"allowedRoles\": [\"student\", \"ta\", \"professor\", \"instructor\", \"admin\"],
