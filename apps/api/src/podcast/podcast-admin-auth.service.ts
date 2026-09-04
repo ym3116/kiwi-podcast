@@ -1,5 +1,6 @@
 import { ForbiddenException, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { KiwiMcpClient } from '../mcp/kiwi-mcp.client';
+import { PODCAST_APP_SLUG } from './podcast-app.config';
 
 interface AdminAppTokenClaims {
   sub?: string;
@@ -40,7 +41,7 @@ export class PodcastAdminAuthService {
     if (typeof claims.exp !== 'number' || claims.exp * 1000 <= Date.now()) {
       throw new UnauthorizedException('Kiwi app token is expired');
     }
-    if (claims.appSlug !== 'kiwi-podcast') {
+    if (claims.appSlug !== PODCAST_APP_SLUG) {
       throw new ForbiddenException('Token was issued for a different Kiwi app');
     }
     if (user.systemRole !== 'admin') {

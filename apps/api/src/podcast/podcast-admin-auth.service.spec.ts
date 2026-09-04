@@ -105,7 +105,7 @@ function token(overrides: Record<string, unknown> = {}) {
   const payload = Buffer.from(JSON.stringify({
     sub: 'admin-1',
     type: 'app_token',
-    appSlug: 'kiwi-podcast',
+    appSlug: 'podcasts',
     classId: null,
     tokenScope: 'admin',
     scopes: ['podcast:manage'],

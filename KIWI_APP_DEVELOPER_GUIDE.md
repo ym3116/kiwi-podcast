@@ -158,7 +158,7 @@ Admin: add to whitelist (approved) ──▶ You: POST /register ──▶ Admin
 
 ```jsonc
 {
-  "slug": "kiwi-podcast",               // unique app id
+  "slug": "podcasts",                   // unique app id
   "registrationSecret": "dev-secret",   // stored bcrypt-hashed; you need the plaintext to register
   "baseUrl": "http://localhost:8000",   // optional, advisory
   "status": "approved",                 // MUST be "approved" before you can register
@@ -180,7 +180,7 @@ the whitelist + secret. See `kiwi-app.controller.ts:119` and
 
 ```jsonc
 {
-  "slug": "kiwi-podcast",
+  "slug": "podcasts",
   "registrationSecret": "dev-secret",        // must match the whitelist entry
   "name": "kiwi-podcast",
   "description": "External Kiwi App for podcast learning workflows",
@@ -565,7 +565,7 @@ Register with `appType: "full"` and `mcpServerUrl`. Kiwi's agent can then call
 | App never appears as a tab | Not enabled for the class, or no `class-tab` UI matching the viewer's role. | Enable (4.3); check `placement`/`allowedRoles`. |
 | `kiwi:context` never arrives | `event.origin` mismatch — your `uiUrl` origin ≠ where the iframe is actually served. | Register the exact origin you serve from. |
 | `Missing required scope: …` | App token lacks the scope. | Add to `maxScopes` (whitelist) **and** `enabledScopes` (class). |
-| Global admin reports that it cannot obtain an app token | The host could not mint a classless admin token. | Enter a class ID in Podcast Admin and open `/admin/app/kiwi-podcast/class/<class-id>`. The class must have Podcast and `podcast:manage` enabled; Podcast still requires the authenticated user to be a system admin. |
+| Global admin reports that it cannot obtain an app token | The host could not mint a classless admin token. | Enter a class ID in Podcast Admin and open `/admin/app/podcasts/class/<class-id>`. The class must have Podcast and `podcast:manage` enabled; Podcast still requires the authenticated user to be a system admin. |
 | AI works but data calls 401/403 | AI is proxied (user session); data calls need the **app token** + the user's role. | Request a token; ensure the user has rights. |
 | Iframe blank / refused to connect | Your app server sends `X-Frame-Options: DENY` or restrictive CSP. | Allow framing from Kiwi's origin. |
 

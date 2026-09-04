@@ -144,7 +144,7 @@ describe('AdminApp', () => {
     await user.type(screen.getByLabelText('Authorization class ID'), 'class-1');
     expect(screen.getByRole('link', { name: /Open class-authorized admin/i })).toHaveAttribute(
       'href',
-      'http://localhost:3001/admin/app/kiwi-podcast/class/class-1',
+      'http://localhost:3001/admin/app/podcasts/class/class-1',
     );
   });
 
@@ -204,7 +204,7 @@ function sendLiveContext({
           userRole: 'admin',
           ...(classId ? { classId } : {}),
           appId: 'app-1',
-          appSlug: 'kiwi-podcast',
+          appSlug: 'podcasts',
           uiSlug: 'global-admin',
           placement: 'admin-panel',
         },
@@ -215,7 +215,7 @@ function sendLiveContext({
         origin: 'http://localhost:3001',
         data: {
           type: 'kiwi:appToken',
-          payload: { accessToken: 'admin-token', scopes: ['podcast:manage'], appSlug: 'kiwi-podcast' },
+          payload: { accessToken: 'admin-token', scopes: ['podcast:manage'], appSlug: 'podcasts' },
         },
       }));
     }

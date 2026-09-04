@@ -9,7 +9,7 @@ import {
   retryMyPodcast,
 } from './api/podcastApi';
 import { simulatorPodcast } from './bridge/simulator';
-import { buildTranscriptKiwiContext } from './bridge/podcastContext';
+import { buildPodcastKiwiContext, buildTranscriptKiwiContext } from './bridge/podcastContext';
 import { useKiwiBridge } from './bridge/useKiwiBridge';
 import { MyPodcasts } from './components/MyPodcasts';
 import { PlayerBar } from './components/PlayerBar';
@@ -60,6 +60,24 @@ export function App() {
   const audioLoadRequestRef = useRef(0);
   const currentTimeRef = useRef(0);
   const pendingSeekRef = useRef<number | null>(null);
+  const canManage = Boolean(managementData);
+  const isSystemAdmin = bridge.context?.isAdmin === true || bridge.context?.userRole === 'admin';
+
+  const updatePodcastContext = useCallback((currentState: string | string[]) => {
+    bridge.updateContext(buildPodcastKiwiContext({
+      className: bridge.context?.className,
+      userRole: bridge.context?.userRole,
+      canManage,
+      isSystemAdmin,
+      currentState,
+    }));
+  }, [
+    bridge.context?.className,
+    bridge.context?.userRole,
+    bridge.updateContext,
+    canManage,
+    isSystemAdmin,
+  ]);
 
   useEffect(() => {
     async function loadPodcast() {
@@ -132,10 +150,19 @@ export function App() {
   }, [myPodcasts]);
 
   useEffect(() => {
-    if (!podcastData || !bridge.updateContext) return;
+    if (!podcastData || mainView !== 'home') return;
     const episodeText = podcastData.episodes.slice(0, 5).map((episode) => episode.title).join('; ');
-    bridge.updateContext(`Kiwi Podcast loaded ${podcastData.podcast.title}. Episodes: ${episodeText}`);
-  }, [bridge.updateContext, podcastData]);
+    const tabName = podcastTab === 'class'
+      ? 'Class Podcast'
+      : podcastTab === 'mine'
+        ? 'My Podcasts'
+        : 'Manage';
+    updatePodcastContext([
+      `Current screen: ${tabName}${selectedDetail ? ' podcast details' : ' tab'}.`,
+      `Loaded class podcast library: ${podcastData.podcast.title}.`,
+      `Published class episodes shown: ${episodeText || 'none'}.`,
+    ]);
+  }, [mainView, podcastData, podcastTab, selectedDetail, updatePodcastContext]);
 
   const selectedItem = useMemo(() => {
     if (!selectedDetail) return null;
@@ -345,6 +372,9 @@ export function App() {
   ) => {
     bridge.updateContext(buildTranscriptKiwiContext({
       className: bridge.context?.className,
+      userRole: bridge.context?.userRole,
+      canManage,
+      isSystemAdmin,
       item,
       selection,
     }));
@@ -429,7 +459,7 @@ export function App() {
             void refreshMyPodcasts();
           }}
           onPlayReady={playPersonalPodcast}
-          onContextChange={bridge.updateContext}
+          onContextChange={updatePodcastContext}
         />
       ) : null}
 

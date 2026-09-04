@@ -144,7 +144,7 @@ function token(overrides: Record<string, unknown> = {}) {
     JSON.stringify({
       sub: 'user-1',
       type: 'app_token',
-      appSlug: 'kiwi-podcast',
+      appSlug: 'podcasts',
       classId: 'class-1',
       scopes: ['class:info:read', 'class:materials:chunks:read', 'podcast:manage'],
       exp: Math.floor(Date.now() / 1000) + 3600,

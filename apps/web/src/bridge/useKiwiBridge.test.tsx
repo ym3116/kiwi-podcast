@@ -77,7 +77,7 @@ describe('useKiwiBridge', () => {
           origin: 'https://kiwi.example',
           data: {
             type: 'kiwi:context',
-            payload: { classId: 'class-1', appSlug: 'kiwi-podcast', userId: 'student-1' },
+            payload: { classId: 'class-1', appSlug: 'podcasts', userId: 'student-1' },
           },
         }));
       });
@@ -99,6 +99,21 @@ describe('useKiwiBridge', () => {
       expect(postMessage).not.toHaveBeenCalledWith(
         expect.objectContaining({ type: 'kiwi:askAI' }),
         expect.anything(),
+      );
+
+      postMessage.mockClear();
+      act(() => {
+        window.dispatchEvent(new MessageEvent('message', {
+          origin: 'https://kiwi.example',
+          data: { type: 'kiwi:requestContext' },
+        }));
+      });
+      expect(postMessage).toHaveBeenCalledWith(
+        {
+          type: 'kiwi:contextResponse',
+          payload: { context: 'Selected transcript line' },
+        },
+        'https://kiwi.example',
       );
     } finally {
       if (originalWindowParent) Object.defineProperty(window, 'parent', originalWindowParent);

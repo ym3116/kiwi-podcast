@@ -249,7 +249,7 @@ describe('App', () => {
               username: 'Alice',
               userRole: 'student',
               appId: 'app-1',
-              appSlug: 'kiwi-podcast',
+              appSlug: 'podcasts',
               uiSlug: 'student',
               capabilities: ['mcp'],
             },
@@ -263,7 +263,7 @@ describe('App', () => {
               accessToken: 'kiwi-token',
               scopes: ['class:info:read'],
               expiresIn: 3600,
-              appSlug: 'kiwi-podcast',
+              appSlug: 'podcasts',
             },
           },
         }));

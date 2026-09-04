@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { KiwiMcpClient } from '../mcp/kiwi-mcp.client';
+import { PODCAST_APP_SLUG } from './podcast-app.config';
 import { SIMULATOR_ACCESS_TOKEN } from './podcast-chunk-source.service';
 
 export const PODCAST_ROLES = ['student', 'ta', 'professor', 'instructor', 'admin'] as const;
@@ -99,7 +100,7 @@ export class PodcastAccessAuthService {
         'Podcast access requires a Kiwi app token for the authenticated user',
       );
     }
-    if (claims.appSlug !== 'kiwi-podcast') {
+    if (claims.appSlug !== PODCAST_APP_SLUG) {
       throw new ForbiddenException('Token was issued for a different Kiwi app');
     }
     if (claims.classId !== classId) {

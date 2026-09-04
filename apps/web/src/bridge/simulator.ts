@@ -8,8 +8,8 @@ export const simulatorContext: KiwiContext = {
   userId: 'sim-user-1',
   username: 'Student Demo',
   userRole: 'student',
-  appId: 'sim-app-kiwi-podcast',
-  appSlug: 'kiwi-podcast',
+  appId: 'sim-app-podcasts',
+  appSlug: 'podcasts',
   uiSlug: 'student',
   capabilities: ['ai', 'mcp'],
 };
@@ -24,7 +24,7 @@ export const simulatorToken: KiwiAppToken = {
     'podcast:manage',
   ],
   expiresIn: 3600,
-  appSlug: 'kiwi-podcast',
+  appSlug: 'podcasts',
 };
 
 const simulatorTranscript = simulatorPodcastFixture.transcript as PodcastTranscriptTurn[];

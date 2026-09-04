@@ -164,14 +164,14 @@ Then open the class in Kiwi and use the `Podcast` tab, or open the system-wide
 Podcast admin panel at:
 
 ```text
-http://localhost:3001/admin/app/kiwi-podcast
+http://localhost:3001/admin/app/podcasts
 ```
 
 If the local Kiwi host cannot mint a classless admin token, the panel asks for
 an authorization class ID and opens Kiwi's existing class-context admin route:
 
 ```text
-http://localhost:3001/admin/app/kiwi-podcast/class/<class-id>
+http://localhost:3001/admin/app/podcasts/class/<class-id>
 ```
 
 The selected class supplies authentication only. The page still reads and
@@ -206,7 +206,7 @@ professor/instructor. Students and TAs receive `403`, so the tab remains hidden.
 The global admin panel prefers a classless Kiwi app token. The Podcast API also
 accepts a class-scoped token as a compatibility fallback, but only when Kiwi
 verifies the token subject as a **system admin**. Both paths require
-`appSlug=kiwi-podcast` and `podcast:manage`; the accepted claim pairs are
+`appSlug=podcasts` and `podcast:manage`; the accepted claim pairs are
 `tokenScope=admin` with `classId=null`, or `tokenScope=class` with a non-empty
 `classId`. Class tokens from older Kiwi builds that predate `tokenScope` are
 also accepted when they have a non-empty `classId`; Kiwi verification, system
@@ -220,6 +220,16 @@ npm run db:generate -w apps/api
 ```
 
 ## Student Transcript And Ask Kiwi
+
+While the class app is open, Podcast sends Kiwi a role-aware capability guide
+through `kiwi:updateContext` and combines it with the user's current tab,
+creator choices, or transcript selection. Students are explicitly limited to
+**Class Podcast** and **My Podcasts** in that context; **Manage** is described as
+available only after the protected management API verifies a professor,
+instructor, or administrator. The app also answers Kiwi's
+`kiwi:requestContext` message with its latest combined context. The separate
+system-admin surface reports whether the admin is viewing **Global Defaults**
+or **All Classes**.
 
 Ready class and personal podcasts show a synchronized transcript in an embedded
 scroll reader. The active turn follows playback until the student scrolls or

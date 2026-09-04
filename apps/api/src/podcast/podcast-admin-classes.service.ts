@@ -1,6 +1,7 @@
 import { BadGatewayException, Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { KiwiMcpClient } from '../mcp/kiwi-mcp.client';
+import { PODCAST_APP_SLUG } from './podcast-app.config';
 
 export interface PodcastAdminClassSummary {
   classId: string;
@@ -125,7 +126,7 @@ export class PodcastAdminClassesService {
 
   private async getClassScopes(accessToken: string, classId: string) {
     try {
-      return await this.kiwi.getClassAppScopes(accessToken, 'kiwi-podcast', classId);
+      return await this.kiwi.getClassAppScopes(accessToken, PODCAST_APP_SLUG, classId);
     } catch {
       throw new BadGatewayException(`Unable to determine Podcast status for class ${classId}`);
     }

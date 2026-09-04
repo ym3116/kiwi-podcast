@@ -72,6 +72,11 @@ describe('PodcastAdminClassesService', () => {
     });
     expect(kiwi.readResource).toHaveBeenCalledWith('admin-token', 'kiwi://classes');
     expect(kiwi.getClassAppScopes).toHaveBeenCalledTimes(3);
+    expect(kiwi.getClassAppScopes).toHaveBeenCalledWith(
+      'admin-token',
+      'podcasts',
+      'class-global',
+    );
     expect(prisma.podcastEpisode.groupBy).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({ publishedJobId: { not: null } }),
     }));

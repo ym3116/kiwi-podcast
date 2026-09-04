@@ -17,6 +17,7 @@ import {
   previewGlobalVoice,
   updatePodcastGlobalDefaults,
 } from './api/podcastApi';
+import { buildPodcastAdminKiwiContext } from './bridge/podcastContext';
 import { useKiwiBridge } from './bridge/useKiwiBridge';
 import { VoiceEditor } from './components/VoiceEditor';
 import {
@@ -117,6 +118,14 @@ export function AdminApp() {
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const previewUrlRef = useRef<string | null>(null);
   const previewRequestRef = useRef(0);
+
+  useEffect(() => {
+    if (!bridge.context) return;
+    bridge.updateContext(buildPodcastAdminKiwiContext({
+      activePage,
+      visibleClassCount: activePage === 'classes' ? classesState?.classes.length : undefined,
+    }));
+  }, [activePage, bridge.context, bridge.updateContext, classesState?.classes.length]);
 
   useEffect(() => {
     if (activePage !== 'defaults') return;
@@ -273,7 +282,7 @@ export function AdminApp() {
   const classAuthorizationUrl = useMemo(() => {
     const classId = authorizationClassId.trim();
     if (!classId || !bridge.hostOrigin) return null;
-    const appSlug = bridge.context?.appSlug || 'kiwi-podcast';
+    const appSlug = bridge.context?.appSlug || 'podcasts';
     return `${bridge.hostOrigin}/admin/app/${encodeURIComponent(appSlug)}/class/${encodeURIComponent(classId)}`;
   }, [authorizationClassId, bridge.context?.appSlug, bridge.hostOrigin]);
 

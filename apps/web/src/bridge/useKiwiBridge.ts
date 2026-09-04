@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
 import { simulatorContext, simulatorToken } from './simulator';
 import {
   KiwiAppToken,
@@ -58,7 +58,7 @@ function contextFromQuery(): KiwiContext {
       username: 'Admin Demo',
       userRole: 'admin',
       appId: params.get('appId') || simulatorContext.appId,
-      appSlug: 'kiwi-podcast',
+      appSlug: 'podcasts',
       uiSlug: params.get('uiSlug') || 'global-admin',
       placement: 'admin-panel',
       isAdmin: true,
@@ -76,6 +76,7 @@ function contextFromQuery(): KiwiContext {
 
 export function useKiwiBridge() {
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
+  const latestContextRef = useRef('');
 
   const post = useCallback(
     (type: string, payload: Record<string, unknown> = {}) => {
@@ -112,6 +113,7 @@ export function useKiwiBridge() {
 
   const updateContext = useCallback(
     (context: string) => {
+      latestContextRef.current = context;
       post('kiwi:updateContext', { context });
     },
     [post],
@@ -142,6 +144,10 @@ export function useKiwiBridge() {
         dispatch({ type: 'token', payload: payload as KiwiAppToken });
       }
 
+      if (type === 'kiwi:requestContext' && latestContextRef.current) {
+        post('kiwi:contextResponse', { context: latestContextRef.current });
+      }
+
       if (type === 'kiwi:aiError') {
         dispatch({ type: 'error', payload: payload?.error || 'Kiwi AI request failed.' });
       }
@@ -156,7 +162,7 @@ export function useKiwiBridge() {
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [state.hostOrigin]);
+  }, [post, state.hostOrigin]);
 
   useEffect(() => {
     sendReady();
